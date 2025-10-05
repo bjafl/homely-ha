@@ -85,7 +85,7 @@ ignore = [
     "D413",  # Missing blank line after last section
     "E501",  # line too long, handled by black
     "E731",  # do not assign a lambda expression, use a def
-    
+
     # May conflict with formatter
     "COM812",
     "ISC001",
