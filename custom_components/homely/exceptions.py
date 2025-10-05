@@ -21,7 +21,7 @@ class HomelyWebSocketError(HomelyNetworkError):
 class HomelyValidationError(HomelyError):
     """Exception for data validation errors."""
 
-    def __init__(self, message: str, invalid_data: dict):
+    def __init__(self, message: str, invalid_data: dict[str, str]) -> None:
         """Initialize with message and copy of invalid data."""
         super().__init__(message)
         self.invalid_data = invalid_data

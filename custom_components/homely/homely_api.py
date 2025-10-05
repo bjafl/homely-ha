@@ -62,14 +62,12 @@ _LOGGER = logging.getLogger(__name__)
 type WebSocketEventHandler = Callable[[WsEvent | None], None]
 
 
-def get_field(obj: BaseModel | dict, name: str) -> Any:
+def get_field(obj: BaseModel | dict[str, Any], name: str) -> Any:
     """Get a field value from a Pydantic model or dict by name or alias."""
     if isinstance(obj, dict):
         return obj.get(name)
     if hasattr(obj, name):
         return getattr(obj, name)
-    if not isinstance(obj, BaseModel):
-        return None
     obj_class = type(obj)
     field_name = next(
         (name for name, field in obj_class.model_fields.items() if field.alias == name),
@@ -87,7 +85,7 @@ class HomelyApi:
         self,
         client_session: ClientSession,
         logger: logging.Logger | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize Homely API client."""
         self._logger = logger or _LOGGER
@@ -160,7 +158,7 @@ class HomelyApi:
         request_type: Literal["get", "post"],
         url: str,
         include_token: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> ClientResponse:
         """Make HTTP request with optional authentication."""
         if include_token:
@@ -187,7 +185,7 @@ class HomelyApi:
         self._cached_credentials = {"username": username, "password": password}
         await self._login(username=username, password=password)
 
-    async def _login(self, **kwargs) -> None:
+    async def _login(self, **kwargs: Any) -> None:
         """Authenticate with Homely API."""
         username = kwargs.get("username", self._cached_credentials.get("username"))
         password = kwargs.get("password", self._cached_credentials.get("password"))
@@ -404,7 +402,7 @@ class HomelyWebSocketClient:
         api: HomelyApi,
         location_id: str,
         logger: logging.Logger | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize WebSocket client for Homely location.
 
@@ -439,7 +437,7 @@ class HomelyWebSocketClient:
                 f"{self._logger.name}.engineio_{self.name}"
             )
         self._sio = socketio.AsyncClient(
-            logger=socketio_logger,  # type: ignore
+            logger=socketio_logger,
             engineio_logger=engineio_logger,
         )
 
@@ -456,7 +454,7 @@ class HomelyWebSocketClient:
     @property
     def connected(self) -> bool:
         """Check if the WebSocket client is connected."""
-        return self._sio and self._sio.connected
+        return bool(self._sio and self._sio.connected)
 
     async def connect(self) -> None:
         """Connect to WebSocket for real-time events."""
@@ -511,7 +509,7 @@ class HomelyWebSocketClient:
                 "Unexpected error during WebSocket connect"
             ) from e
 
-    async def _try_reconnect(self, timeout=5) -> bool:
+    async def _try_reconnect(self, timeout: int = 5) -> bool:
         """Attempt to reconnect the WebSocket."""
         if self._should_disconnect:
             return False
@@ -529,19 +527,19 @@ class HomelyWebSocketClient:
 
         @callback
         @self._sio.event
-        def connect():
+        def connect() -> None:
             self._logger.info(f"WebSocket {self.name}: connected")
             self._handle_event("connect")
 
         @callback
         @self._sio.event
-        def disconnect():
+        def disconnect() -> None:
             self._logger.info(f"WebSocket {self.name}: disconnected")
             self._handle_event("disconnect")
 
         @callback
         @self._sio.event
-        def event(data):
+        def event(data: dict[str, Any]) -> None:
             self._logger.debug(
                 "Homely event received on websocket %s: %s", self.name, data
             )

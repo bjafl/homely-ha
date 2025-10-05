@@ -11,7 +11,7 @@ from typing import Any
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import HomelyDataUpdateCoordinator
+from .coordinator import HomelyDataUpdateCoordinator
 from .const import DOMAIN
 from .models import (
     Device,

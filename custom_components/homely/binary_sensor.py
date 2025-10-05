@@ -14,7 +14,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import HomelyDataUpdateCoordinator
+from .coordinator import HomelyDataUpdateCoordinator
 from .base_sensor import HomelySensorBase
 from .const import (
     DOMAIN,
@@ -78,7 +78,7 @@ def pick_alarm_classes(device: Device) -> list[type[HomelyAlarmSensor]] | None:
     if not alarm:
         return None
     model_name = device.model_name.lower() if device.model_name else ""
-    classes = []
+    classes: list[type[HomelyAlarmSensor]] = []
     if alarm.states.fire is not None:
         classes.append(HomelySmokeSensor)
     if alarm.states.flood is not None:
@@ -99,7 +99,7 @@ def create_binary_entities_from_device(
     device: Device,
 ) -> list[HomelySensorBase]:
     """Create binary sensor entities based on device capabilities."""
-    entities = []
+    entities: list[HomelySensorBase] = []
     sensor_args = (coordinator, location_id, device)
     if (alarm_classes := pick_alarm_classes(device)) is not None:
         for alarm_cls in alarm_classes:
@@ -324,7 +324,7 @@ class HomelyBatteryLowSensor(HomelyBinarySensorBase):
         return state
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, float | None]:
         """Return the state attributes."""
         existing_attrs = super().extra_state_attributes or {}
         attrs = dict(existing_attrs)

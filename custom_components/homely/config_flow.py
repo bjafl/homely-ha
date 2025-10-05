@@ -46,14 +46,16 @@ class HomelyConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize flow."""
         self._api: HomelyApi | None = None
         self._locations: dict[str, str] = {}
         self._username: str | None = None
         self._password: str | None = None
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors = {}
 
@@ -92,7 +94,9 @@ class HomelyConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_locations(self, user_input=None):
+    async def async_step_locations(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle location selection."""
         if user_input is not None:
             selected_locations = user_input[CONF_LOCATION]
@@ -147,7 +151,7 @@ class HomelyConfigFlow(ConfigFlow, domain=DOMAIN):
             },
         )
 
-    def _get_locations_schema(self):
+    def _get_locations_schema(self) -> vol.Schema:
         """Get the locations selection schema."""
         return vol.Schema(
             {
@@ -157,7 +161,7 @@ class HomelyConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         """Get the options flow for this handler."""
         return HomelyOptionsFlowHandler(config_entry)
 

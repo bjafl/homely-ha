@@ -18,9 +18,8 @@ from .homely_api import (
     HomelyApi,
     HomelyHomeState,
     HomelyWebSocketClient,
-    Location,
-    WsEvent,
 )
+from .models import Location, WsEvent
 from .models import Device
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,7 +115,7 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
     # @callback
     # def get_feature_state(self, device_id: str, feature: str, location_id: str | None = None) -> any | None:
 
-    async def ensure_api_initialized(self):
+    async def ensure_api_initialized(self) -> None:
         """Check if API is initialized, if not, do so."""
         if not self.api.is_authenticated:
             await self.api.login(self.user, self.pwd)
@@ -261,7 +260,7 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
                 "WebSocket update for %s but no existing data, triggering refresh",
                 location_id,
             )
-            self.async_request_refresh()  # pyright: ignore[reportUnusedCoroutine]
+            self.hass.async_create_task(self.async_request_refresh())
             return
         try:
             prev_state = self.data[location_id]
@@ -281,7 +280,7 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             ):
                 self._last_error_refresh = now
                 _LOGGER.info("Triggering data refresh due to WebSocket error")
-                self.async_request_refresh()  # pyright: ignore[reportUnusedCoroutine]
+                self.hass.async_create_task(self.async_request_refresh())
             else:
                 _LOGGER.debug("Skipping refresh request - too recent (rate limited)")
 

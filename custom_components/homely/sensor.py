@@ -22,7 +22,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from custom_components.homely.homely_api import HomelyHomeState
 
-from . import HomelyDataUpdateCoordinator
+from .coordinator import HomelyDataUpdateCoordinator
 from .base_sensor import HomelySensorBase
 from .const import DOMAIN, HomelyEntityIcons
 from .models import (
@@ -72,7 +72,7 @@ def create_entities_from_device(
     device: Device,
 ) -> list[HomelySensorBase]:
     """Create sensor entities based on device capabilities."""
-    entities = []
+    entities: list[HomelySensorBase] = []
     if device.features.temperature is not None:
         entities.append(HomelyTemperatureSensor(coordinator, location_id, device))
     if (diagnostic := device.features.diagnostic) is not None:
@@ -398,8 +398,6 @@ class HomelyEnergySensor(HomelySensorBase):
                 state = device.features.metering.states.summation_received
             case MeteringStateName.SUMMATION_DELIVERED:
                 state = device.features.metering.states.summation_delivered
-            case _:
-                state = None
         if state is not None:
             self.last_updated = state.last_updated
         return state

@@ -12,6 +12,8 @@ type StateValue = bool | int | float | str
 
 
 class AlarmState(str, Enum):
+    """Possible alarm states for Homely system."""
+
     DISARMED = "DISARMED"
     ARMED_AWAY = "ARMED_AWAY"
     ARMED_NIGHT = "ARMED_NIGHT"
@@ -24,12 +26,16 @@ class AlarmState(str, Enum):
 
 
 class UserRole(str, Enum):
+    """User roles at a Homely location."""
+
     ADMIN = "ADMIN"
     OWNER = "OWNER"
 
 
 # Authentication Models
 class AuthRequest(BaseModel):
+    """Authentication request for Homely API login."""
+
     username: Annotated[
         str, Field(description="Same email address as used in the Homely app")
     ]
@@ -39,6 +45,8 @@ class AuthRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    """OAuth token response from Homely API."""
+
     access_token: Annotated[str, Field(description="Access token for API requests")]
     expires_in: Annotated[int, Field(description="Token expiration time in seconds")]
     refresh_expires_in: Annotated[
@@ -54,11 +62,15 @@ class TokenResponse(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
+    """Request to refresh an access token."""
+
     refresh_token: str
 
 
 # Location Models
 class Location(BaseModel):
+    """Homely location/gateway information."""
+
     name: Annotated[str, Field(description="User defined name for the location")]
     role: Annotated[
         UserRole,
@@ -86,6 +98,8 @@ class Location(BaseModel):
 
 # Sensor State Models
 class SensorState[T = StateValue](BaseModel):
+    """Generic sensor state with value and last updated timestamp."""
+
     model_config = ConfigDict(extra="allow")
 
     value: T | None = None
@@ -93,6 +107,8 @@ class SensorState[T = StateValue](BaseModel):
 
 
 class AlarmStates(BaseModel):
+    """Collection of alarm-related sensor states."""
+
     model_config = ConfigDict(extra="allow")
 
     alarm: SensorState[bool] | None = None
@@ -102,6 +118,8 @@ class AlarmStates(BaseModel):
 
 
 class TemperatureStates(BaseModel):
+    """Collection of temperature sensor states."""
+
     model_config = ConfigDict(extra="allow")
 
     temperature: SensorState[float] | None = None
@@ -111,6 +129,8 @@ class TemperatureStates(BaseModel):
 
 
 class BatteryStates(BaseModel):
+    """Collection of battery sensor states."""
+
     model_config = ConfigDict(extra="allow")
 
     low: SensorState[bool] | None = None
@@ -119,6 +139,8 @@ class BatteryStates(BaseModel):
 
 
 class DiagnosticStates(BaseModel):
+    """Collection of diagnostic sensor states."""
+
     model_config = ConfigDict(extra="allow")
 
     network_link_strength: Annotated[
@@ -130,6 +152,8 @@ class DiagnosticStates(BaseModel):
 
 
 class MeteringStates(BaseModel):
+    """Collection of energy metering sensor states."""
+
     model_config = ConfigDict(extra="allow")
 
     summation_delivered: Annotated[
@@ -143,6 +167,8 @@ class MeteringStates(BaseModel):
 
 
 class ThermostatStates(BaseModel):
+    """Collection of thermostat sensor states."""
+
     model_config = ConfigDict(extra="allow")
 
     local_temperature: Annotated[
@@ -168,6 +194,8 @@ class ThermostatStates(BaseModel):
 
 # Feature Models
 class FeatureName(str, Enum):
+    """Available device feature types."""
+
     ALARM = "alarm"
     TEMPERATURE = "temperature"
     BATTERY = "battery"
@@ -177,30 +205,44 @@ class FeatureName(str, Enum):
 
 
 class AlarmFeature(BaseModel):
+    """Alarm feature container."""
+
     states: AlarmStates
 
 
 class TemperatureFeature(BaseModel):
+    """Temperature feature container."""
+
     states: TemperatureStates
 
 
 class BatteryFeature(BaseModel):
+    """Battery feature container."""
+
     states: BatteryStates
 
 
 class DiagnosticFeature(BaseModel):
+    """Diagnostic feature container."""
+
     states: DiagnosticStates
 
 
 class MeteringFeature(BaseModel):
+    """Energy metering feature container."""
+
     states: MeteringStates
 
 
 class ThermostatFeature(BaseModel):
+    """Thermostat feature container."""
+
     states: ThermostatStates
 
 
 class DeviceFeatures(BaseModel):
+    """Collection of all possible device features."""
+
     alarm: AlarmFeature | None = None
     temperature: TemperatureFeature | None = None
     battery: BatteryFeature | None = None
@@ -211,6 +253,8 @@ class DeviceFeatures(BaseModel):
 
 # Device Models
 class Device(BaseModel):
+    """Homely device with all features and states."""
+
     id: Annotated[UUID, Field(description="Unique ID for the device")]
     name: Annotated[
         str | None, Field(description="User defined name for the device")
@@ -234,6 +278,8 @@ class Device(BaseModel):
 
 # Home API Response Model
 class HomeResponse(BaseModel):
+    """Complete home state from Homely API."""
+
     location_id: Annotated[
         UUID, Field(alias="locationId", description="Unique ID for the location")
     ]
@@ -256,16 +302,21 @@ class HomeResponse(BaseModel):
 
 # Error Response Models
 class ErrorResponse(BaseModel):
+    """API error response structure."""
+
     statusCode: int
     message: str | list[str]
 
 
 # Helper func to get current time
 def time_now(tz: timezone = UTC, buffer_seconds: int = 0) -> datetime:
+    """Get current time with optional buffer for token expiry checks."""
     return datetime.now(tz) + timedelta(seconds=buffer_seconds)
 
 
 class APITokens(BaseModel):
+    """OAuth tokens with expiration tracking."""
+
     access_token: str
     refresh_token: str
     expires_at: datetime | None = None
@@ -327,11 +378,15 @@ type StateCollection = (
 
 # TODO: unsure about the values here...
 class WsEventType(str, Enum):
+    """WebSocket event types from Homely."""
+
     DEVICE_STATE_CHANGED = "device-state-changed"
     ALARM_STATE_CHANGED = "alarm-state-changed"
 
 
 class AlarmStateName(str, Enum):
+    """Alarm state names for WebSocket updates."""
+
     ALARM = "alarm"
     TAMPER = "tamper"
     FLOOD = "flood"
@@ -339,22 +394,30 @@ class AlarmStateName(str, Enum):
 
 
 class TemperatureStateName(str, Enum):
+    """Temperature state names for WebSocket updates."""
+
     TEMPERATURE = "temperature"
     LOCAL_TEMPERATURE = "localTemperature"
 
 
 class BatteryStateName(str, Enum):
+    """Battery state names for WebSocket updates."""
+
     LOW = "low"
     DEFECT = "defect"
     VOLTAGE = "voltage"
 
 
 class DiagnosticStateName(str, Enum):
+    """Diagnostic state names for WebSocket updates."""
+
     NETWORK_LINK_STRENGTH = "networklinkstrength"
     NETWORK_LINK_ADDRESS = "networklinkaddress"
 
 
 class MeteringStateName(str, Enum):
+    """Energy metering state names for WebSocket updates."""
+
     SUMMATION_DELIVERED = "summationdelivered"
     SUMMATION_RECEIVED = "summationreceived"
     DEMAND = "demand"
@@ -362,6 +425,8 @@ class MeteringStateName(str, Enum):
 
 
 class ThermostatStateName(str, Enum):
+    """Thermostat state names for WebSocket updates."""
+
     LOCAL_TEMPERATURE = "LocalTemperature"
     ABS_MIN_HEAT_SETPOINT_LIMIT = "AbsMinHeatSetpointLimit"
     ABS_MAX_HEAT_SETPOINT_LIMIT = "AbsMaxHeatSetpointLimit"
@@ -383,6 +448,8 @@ type StateName = (
 
 # TODO: unsure about the exact model here...
 class WsStateChangeData(SensorState):
+    """WebSocket state change data for a single sensor."""
+
     model_config = ConfigDict(extra="allow")
 
     feature: Annotated[FeatureName | str, Field(alias="feature")]
@@ -393,6 +460,8 @@ class WsStateChangeData(SensorState):
 
 # TODO: unsure about the exact model here...
 class WsDeviceChangeData(BaseModel):
+    """WebSocket device state change event data."""
+
     model_config = ConfigDict(extra="allow")
 
     location_id: Annotated[UUID, Field(alias="locationId")]
@@ -407,6 +476,8 @@ class WsDeviceChangeData(BaseModel):
 
 # TODO: unsure about the exact model here...
 class WsAlarmChangeData(BaseModel):
+    """WebSocket alarm state change event data."""
+
     model_config = ConfigDict(extra="allow")
 
     location_id: Annotated[UUID, Field(alias="locationId")]
@@ -415,6 +486,8 @@ class WsAlarmChangeData(BaseModel):
 
 # TODO: unsure about the exact model here...
 class WsEventUnknown(BaseModel):
+    """Unknown WebSocket event type."""
+
     model_config = ConfigDict(extra="allow")
 
     type: str
@@ -422,6 +495,8 @@ class WsEventUnknown(BaseModel):
 
 
 class WsDeviceChangeEvent(BaseModel):
+    """WebSocket device state change event."""
+
     model_config = ConfigDict(extra="allow")
 
     type: Literal[WsEventType.DEVICE_STATE_CHANGED] = WsEventType.DEVICE_STATE_CHANGED
@@ -429,6 +504,8 @@ class WsDeviceChangeEvent(BaseModel):
 
 
 class WsAlarmChangeEvent(BaseModel):
+    """WebSocket alarm state change event."""
+
     model_config = ConfigDict(extra="allow")
 
     type: Literal[WsEventType.ALARM_STATE_CHANGED] = WsEventType.ALARM_STATE_CHANGED
@@ -436,4 +513,4 @@ class WsAlarmChangeEvent(BaseModel):
 
 
 type WsEvent = WsDeviceChangeEvent | WsAlarmChangeEvent | WsEventUnknown
-WsEventAdapter = TypeAdapter(WsEvent)
+WsEventAdapter: TypeAdapter[WsEvent] = TypeAdapter(WsEvent)
