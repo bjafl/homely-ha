@@ -500,12 +500,14 @@ class TestHomelyDataUpdateCoordinator:
             side_effect=HomelyWebSocketError("Connection failed")
         )
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with patch.object(hass, "async_create_task") as mock_create_task:
-                await coordinator._schedule_reconnect(TEST_LOCATION_ID, attempt=6)
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            patch.object(hass, "async_create_task") as mock_create_task,
+        ):
+            await coordinator._schedule_reconnect(TEST_LOCATION_ID, attempt=6)
 
-                # Should not schedule another retry after max attempts
-                mock_create_task.assert_not_called()
+            # Should not schedule another retry after max attempts
+            mock_create_task.assert_not_called()
 
     async def test_async_shutdown(self, hass, mock_config_entry, api_logged_in):
         """Test async shutdown."""

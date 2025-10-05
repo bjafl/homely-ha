@@ -20,32 +20,12 @@ from .models import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
-# def create_device_info(device: Device) -> dict[str, Any]:
-#     """Create device info for the device registry."""
-#     device_info = {
-#         "identifiers": {(DOMAIN, device.id)},
-#         "name": device.name,
-#         "manufacturer": get_manufacturer(device),
-#         "model": device.model_name,
-#         "suggested_area": device.location,
-#         "serial_number": device.serial_number,
-#     }
-#     # Filter out None values to avoid mutating dict during iteration
-#     return {key: value for key, value in device_info.items() if value is not None}
-
-
-# def get_model_name(device: Device) -> str:
-#     """Get the model name for a Homely device."""
-#     MODEL_ID_MAP = {
-#         "15e64f49-fdbc-4cd6-9912-e2a6e838d44f": "Intelligent Smoke Alarm",
-#         "17ddbcb4-8c00-4bc3-b06f-d20f51c0fe52": "Alarm Motion Sensor 2",
-#         "ad923ba3-2b72-45e0-a9d7-91808a76f2ed": "Intelligent Heat Alarm",
-#         "57038a68-3a39-43c8-be8d-11f58521eecc": "Motion Sensor Mini",
-#         "9b765375-e3f4-4627-b73c-b4143ce86c2c": "Alarm Entry Sensor 2",
-#         # TODO: Add entries (+ move to consts?)
-#     }
-#     return MODEL_ID_MAP.get(str(device.model_id), "Unknown")
+type HomelySensorBaseAny = (
+    HomelySensorBase[bool]
+    | HomelySensorBase[int]
+    | HomelySensorBase[float]
+    | HomelySensorBase[str]
+)
 
 
 def get_manufacturer(device: Device) -> str:
@@ -94,7 +74,9 @@ def get_manufacturer(device: Device) -> str:
     return "Unknown"
 
 
-class HomelySensorBase(CoordinatorEntity[HomelyDataUpdateCoordinator]):
+class HomelySensorBase[T: (bool, int, float, str)](
+    CoordinatorEntity[HomelyDataUpdateCoordinator]
+):
     """Base class for Homely sensors."""
 
     # coordinator: HomelyDataUpdateCoordinator
@@ -130,30 +112,11 @@ class HomelySensorBase(CoordinatorEntity[HomelyDataUpdateCoordinator]):
             manufacturer=self.device_manufacturer,
         )
 
-    # def _parse_float_value(self, value: StateValue | None) -> float | None:
-    #     """Parse expected numeric value as float, handling invalid values."""
-    #     if value is None:
-    #         return None
-    #     if isinstance(value, (int, float)):
-    #         return float(value)
-
-    #     if isinstance(value, str):
-    #         try:
-    #             return float(value)
-    #         except ValueError:
-    #             _LOGGER.warning(f"Can't parse StateValue {value} to float")
-    #             return None
-
-    #     _LOGGER.warning(
-    #         f"Can't parse unexpected StateValue type to float: {type(value)} = {value}"
-    #     )
-    #     return None
-
     def _get_current_device_state(self) -> Device | None:
         """Get current device state from coordinator."""
         return self.coordinator.get_device_state(self.device_id, self.location_id)
 
-    def _get_current_sensor_state(self) -> SensorState | None:
+    def _get_current_sensor_state(self) -> SensorState[T] | None:
         """Get current sensor state from coordinator.
 
         To be implemented in subclasses.

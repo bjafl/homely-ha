@@ -526,19 +526,19 @@ class HomelyWebSocketClient:
         """Set up Socket.IO event handlers."""
 
         @callback
-        @self._sio.event
+        @self._sio.event  # type: ignore[misc]
         def connect() -> None:
             self._logger.info(f"WebSocket {self.name}: connected")
             self._handle_event("connect")
 
         @callback
-        @self._sio.event
+        @self._sio.event  # type: ignore[misc]
         def disconnect() -> None:
             self._logger.info(f"WebSocket {self.name}: disconnected")
             self._handle_event("disconnect")
 
         @callback
-        @self._sio.event
+        @self._sio.event  # type: ignore[misc]
         def event(data: dict[str, Any]) -> None:
             self._logger.debug(
                 "Homely event received on websocket %s: %s", self.name, data

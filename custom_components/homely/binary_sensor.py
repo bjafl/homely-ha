@@ -97,9 +97,9 @@ def create_binary_entities_from_device(
     coordinator: HomelyDataUpdateCoordinator,
     location_id: str,
     device: Device,
-) -> list[HomelySensorBase]:
+) -> list[HomelySensorBase[bool]]:
     """Create binary sensor entities based on device capabilities."""
-    entities: list[HomelySensorBase] = []
+    entities: list[HomelySensorBase[bool]] = []
     sensor_args = (coordinator, location_id, device)
     if (alarm_classes := pick_alarm_classes(device)) is not None:
         for alarm_cls in alarm_classes:
@@ -121,7 +121,7 @@ def create_binary_entities_from_device(
     return entities
 
 
-class HomelyBinarySensorBase(HomelySensorBase, BinarySensorEntity):
+class HomelyBinarySensorBase(HomelySensorBase[bool], BinarySensorEntity):
     """Base class for Homely binary sensors."""
 
     @property

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from homeassistant.components.alarm_control_panel.const import AlarmControlPanelState
 from homeassistant.components.sensor import (
@@ -23,7 +23,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from custom_components.homely.homely_api import HomelyHomeState
 
 from .coordinator import HomelyDataUpdateCoordinator
-from .base_sensor import HomelySensorBase
+from .base_sensor import HomelySensorBase, HomelySensorBaseAny
 from .const import DOMAIN, HomelyEntityIcons
 from .models import (
     AlarmState,
@@ -54,10 +54,15 @@ async def async_setup_entry(
         _LOGGER.warning("No data for selected locations, no sensors will be created")
         return
 
-    entities = []
+    entities: list[HomelySensorBaseAny] = []
 
     for location_id, home_state in selected_locations_data.items():
-        entities.append(HomelyAlarmStateSensor(coordinator, location_id, home_state))
+        entities.append(
+            cast(
+                HomelySensorBaseAny,
+                HomelyAlarmStateSensor(coordinator, location_id, home_state),
+            )
+        )
 
         for device in home_state.devices:
             dev_entities = create_entities_from_device(coordinator, location_id, device)
@@ -70,9 +75,9 @@ def create_entities_from_device(
     coordinator: HomelyDataUpdateCoordinator,
     location_id: str,
     device: Device,
-) -> list[HomelySensorBase]:
+) -> list[HomelySensorBaseAny]:
     """Create sensor entities based on device capabilities."""
-    entities: list[HomelySensorBase] = []
+    entities: list[HomelySensorBaseAny] = []
     if device.features.temperature is not None:
         entities.append(HomelyTemperatureSensor(coordinator, location_id, device))
     if (diagnostic := device.features.diagnostic) is not None:
@@ -122,7 +127,7 @@ def create_entities_from_device(
     return entities
 
 
-class HomelyTemperatureSensor(HomelySensorBase, SensorEntity):
+class HomelyTemperatureSensor(HomelySensorBase[float], SensorEntity):
     """Temperature sensor for Homely devices."""
 
     def __init__(
@@ -276,7 +281,7 @@ class HomelyAlarmStateSensor(
         return self._homely_alarm_state
 
 
-class HomelySignalStrengthSensor(HomelySensorBase, SensorEntity):
+class HomelySignalStrengthSensor(HomelySensorBase[int], SensorEntity):
     """Diagnostic sensor for Homely devices."""
 
     def __init__(
@@ -350,7 +355,7 @@ class HomelySignalStrengthSensor(HomelySensorBase, SensorEntity):
         return attrs
 
 
-class HomelyEnergySensor(HomelySensorBase):
+class HomelyEnergySensor(HomelySensorBase[int], SensorEntity):
     """Energy sensor for Homely devices."""
 
     def __init__(
@@ -403,7 +408,7 @@ class HomelyEnergySensor(HomelySensorBase):
         return state
 
 
-class HomelyEnergyDemandSensor(HomelySensorBase, SensorEntity):
+class HomelyEnergyDemandSensor(HomelySensorBase[int], SensorEntity):
     """Energy demand sensor for Homely devices."""
 
     def __init__(
@@ -438,7 +443,7 @@ class HomelyEnergyDemandSensor(HomelySensorBase, SensorEntity):
         return state
 
 
-class HomelyThermostatSensor(HomelySensorBase):
+class HomelyThermostatSensor(HomelySensorBase[float], SensorEntity):
     """Thermostat sensor for Homely devices.
 
     Api is read only, so implemented as temperature sensor, not climate control.

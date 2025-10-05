@@ -324,6 +324,7 @@ class APITokens(BaseModel):
 
     @classmethod
     def from_token_response(cls, response: TokenResponse) -> "APITokens":
+        """Create APITokens from a TokenResponse."""
         now = time_now()
         return cls(
             access_token=response.access_token,
@@ -341,11 +342,13 @@ class APITokens(BaseModel):
         )
 
     def is_access_token_expired(self, buffer_seconds: int = 30) -> bool:
+        """Check if the access token is expired or about to expire."""
         if not self.expires_at:
             return False
         return time_now(buffer_seconds=buffer_seconds) >= self.expires_at
 
     def is_refresh_token_expired(self, buffer_seconds: int = 30) -> bool:
+        """Check if the refresh token is expired or about to expire."""
         if not self.refresh_expires_at:
             return False
         return time_now(buffer_seconds=buffer_seconds) >= self.refresh_expires_at
