@@ -1,0 +1,95 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Homely-autentisering",
+        "description": "Skriv inn påloggingsinformasjonen for Homely-kontoen din",
+        "data": {
+          "username": "E-postadresse",
+          "password": "Passord"
+        }
+      },
+      "locations": {
+        "title": "Velg lokasjoner",
+        "description": "Velg hvilke lokasjoner som skal overvåkes. Fant {location_count} lokasjoner for {username}.",
+        "data": {
+          "location": "Lokasjoner"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ugyldig påloggingsinformasjon. Vennligst sjekk e-post og passord.",
+      "cannot_connect": "Kunne ikke koble til Homely-tjenesten. Vennligst sjekk internettforbindelsen.",
+      "no_locations": "Ingen lokasjoner funnet for denne kontoen.",
+      "unknown": "En uventet feil oppstod. Vennligst prøv igjen.",
+      "at_least_one_location": "Vennligst velg minst én lokasjon å overvåke."
+    },
+    "abort": {
+      "already_configured": "Denne kontoen er allerede konfigurert. De valgte lokasjonene har blitt oppdatert.",
+      "no_locations": "Ingen lokasjoner tilgjengelig for denne kontoen.",
+      "no_username": "Brukernavn er påkrevd for å fortsette."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Homely-innstillinger",
+        "description": "Konfigurer hvilke lokasjoner som skal overvåkes",
+        "data": {
+          "location": "Lokasjoner"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "opening": {
+        "name": "Dør/Vindu"
+      },
+      "motion": {
+        "name": "Bevegelse"
+      },
+      "battery_defect": {
+        "name": "Batterifeil"
+      },
+      "smoke": {
+        "name": "Røyk"
+      },
+      "tamper": {
+        "name": "Manipulering"
+      },
+      "flood": {
+        "name": "Vannlekkasje"
+      },
+      "battery_low": {
+        "name": "Batteristrøm"
+      },
+      "energy_check": {
+        "name": "Energisjekk"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperatur"
+      },
+      "alarm_state": {
+        "name": "Alarmstatus"
+      },
+      "battery_level": {
+        "name": "Batterinivå"
+      },
+      "signal_strength": {
+        "name": "Signalstyrke"
+      },
+      "energy_delivered": {
+        "name": "Energi levert"
+      },
+      "energy_received": {
+        "name": "Energi mottatt"
+      },
+      "thermostat": {
+        "name": "Termostat"
+      }
+    }
+  }
+}

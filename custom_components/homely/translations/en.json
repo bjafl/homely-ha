@@ -1,0 +1,95 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Homely Authentication",
+        "description": "Enter your Homely account credentials",
+        "data": {
+          "username": "Email address",
+          "password": "Password"
+        }
+      },
+      "locations": {
+        "title": "Select Locations",
+        "description": "Choose which locations to monitor. Found {location_count} locations for {username}.",
+        "data": {
+          "location": "Locations"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Please check your email and password.",
+      "cannot_connect": "Unable to connect to Homely service. Please check your internet connection.",
+      "no_locations": "No locations found for this account.",
+      "unknown": "An unexpected error occurred. Please try again.",
+      "at_least_one_location": "Please select at least one location to monitor."
+    },
+    "abort": {
+      "already_configured": "This account is already configured. The selected locations have been updated.",
+      "no_locations": "No locations available for this account.",
+      "no_username": "Username is required to continue."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Homely Options",
+        "description": "Configure which locations to monitor",
+        "data": {
+          "location": "Locations"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "opening": {
+        "name": "Door/Window"
+      },
+      "motion": {
+        "name": "Motion"
+      },
+      "battery_defect": {
+        "name": "Battery Fault"
+      },
+      "smoke": {
+        "name": "Smoke"
+      },
+      "tamper": {
+        "name": "Tamper"
+      },
+      "flood": {
+        "name": "Flood"
+      },
+      "battery_low": {
+        "name": "Battery Power"
+      },
+      "energy_check": {
+        "name": "Energy Check"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "alarm_state": {
+        "name": "Alarm State"
+      },
+      "battery_level": {
+        "name": "Battery Level"
+      },
+      "signal_strength": {
+        "name": "Signal Strength"
+      },
+      "energy_delivered": {
+        "name": "Energy Delivered"
+      },
+      "energy_received": {
+        "name": "Energy Received"
+      },
+      "thermostat": {
+        "name": "Thermostat"
+      }
+    }
+  }
+}

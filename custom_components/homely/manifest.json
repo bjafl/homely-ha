@@ -1,0 +1,16 @@
+{
+  "domain": "homely",
+  "name": "Homely",
+  "codeowners": ["@bjafl"],
+  "config_flow": true,
+  "documentation": "https://github.com/bjafl/homely-ha",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/bjafl/homely-ha/issues",
+  "requirements": [
+    "homeassistant>=2025.1.0",
+    "pydantic>=2.10.0",
+    "python-socketio>=5.10.0"
+  ],
+  "version": "0.1.0"
+}
