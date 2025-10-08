@@ -6,28 +6,31 @@
 
 ## Executive Summary
 
-**Current Tier**: 🎯 **Bronze-Ready** (90% complete, pending PR submission)
+**Current Tier**: 🎯 **Bronze-Ready** (95% complete, pending PR submission)
 **Overall Grade**: **A-** → Can reach **A (Silver)** with test coverage improvements
 
 ### Status Dashboard
 
 | Tier | Status | Progress | Blockers |
 |------|--------|----------|----------|
-| 🥉 Bronze | ⚠️ Ready | 90% | Brands PR submission |
+| 🥉 Bronze | ⚠️ Ready | 95% | Brands PR submission only |
 | 🥈 Silver | ⚠️ 85% | 85% | Test coverage 85%→90% |
 | 🥇 Gold | ❌ 50% | 50% | Auto-discovery, test coverage |
 | 🏆 Platinum | ❌ 45% | 45% | Type hints 87%→100% |
 
 ### Recent Improvements ✅
+- ✅ Config file paths fixed (pyproject.toml, makefile)
+- ✅ Docker compose configuration refined (correct volume mount)
 - ✅ Branding assets created (icon.png, icon@2x.png, logo variants)
 - ✅ manifest.json corrected (iot_class: cloud_push)
 - ✅ Comprehensive documentation (README, CLAUDE.md, QUALITY_ASSESSMENT.md)
 - ✅ Docker test server setup with docker-compose
-- ✅ WebSocket alarm state updates implemented
+- ✅ WebSocket alarm state updates implemented (_process_ws_alarm_state_update)
 - ✅ MyPy errors fixed, comprehensive docstrings added
 - ✅ Pre-commit hooks configured and passing
 - ✅ Makefile enhanced with docker and package commands
 - ✅ API documentation repository created (bjafl/homely-api-docs)
+- ✅ .gitignore updated (.ha_docker_test, .claude, cache dirs)
 
 ---
 
@@ -98,28 +101,13 @@
 
 ---
 
-## Critical Issues & Fixes
+## Outstanding Issues
 
-### 1. Branding - ⚠️ READY FOR SUBMISSION
+### Branding - ⚠️ READY FOR SUBMISSION
 - **Status**: Assets created, awaiting PR
-- **Location**: `branding/homely/icon.png` and `icon@2x.png`
+- **Location**: `branding/homely/`
 - **Action**: Follow `branding/README.md` to submit PR
 - **Timeline**: 30 min work + 3-7 days approval
-
-### 2. manifest.json - ✅ FIXED
-- **Was**: `"iot_class": "cloud_polling"`
-- **Now**: `"iot_class": "cloud_push"` ✅
-
-### 3. Config File Paths - ⚠️ NEEDS FIX
-- **Files**: pyproject.toml (line 99), makefile (line 19 - already fixed in recent commits)
-- **Fix**: Change `your_integration` → `homely` in pyproject.toml
-- **Timeline**: 5 minutes
-- **Note**: Line 19 in makefile still references `your_integration` but other mypy references were updated
-
-### 4. Docker Test Server - ✅ ADDED
-- **Status**: Fully configured with docker-compose.yaml
-- **Features**: Live HA test instance, auto-mounted custom_components
-- **Commands**: `make docker-up`, `make docker-down`, `make docker-logs`
 
 ---
 
@@ -140,60 +128,49 @@
 
 ## Recommendations by Priority
 
-### 🔴 Critical (Before v1.0) - 35 minutes
+### 🔴 Critical (Before v1.0) - 30 minutes
 
-1. **Submit brands PR** (30 min)
-   - Follow instructions in `branding/README.md`
-   - Wait 3-7 days for approval
+**Submit brands PR** (30 min + 3-7 day wait)
+- Follow instructions in `branding/README.md`
+- Wait for approval
 
-2. **Fix config paths** (5 min)
-   - pyproject.toml: line 99
-   - makefile: line 19 (mypy path)
-   - Replace `your_integration` with `homely`
+### 🟡 High Priority (Before v1.0) - 10-15 hours
 
-### 🟡 High Priority (Before v1.0) - 16-24 hours
+**Implement alarm control** (8-12 hours)
+- Add alarm_control_panel platform
+- Implement arm/disarm/arm_night/arm_home API methods
+- Add corresponding coordinator methods
 
-3. **Implement alarm control** (8-12 hours)
-   - Add alarm_control_panel platform
-   - Implement arm/disarm/arm_night/arm_home API methods
-   - Add corresponding coordinator methods
-
-4. **Increase type annotations** (2-3 hours)
-   - Add type hints to remaining 17 functions
-   - Target: 100% coverage
-
-5. ✅ **Comprehensive docstrings** - COMPLETED
-   - All models documented
-   - Public methods have docstrings
+**Increase type annotations** (2-3 hours)
+- Add type hints to remaining 17 functions
+- Target: 100% coverage
 
 ### 🟠 Medium Priority (v1.1+) - 8-16 hours
 
-6. **Improve test coverage to 90%+** (6-10 hours)
-   - WebSocket error scenarios
-   - Reconnection logic
-   - Integration tests
+**Improve test coverage to 90%+** (6-10 hours)
+- WebSocket error scenarios
+- Reconnection logic
+- Integration tests
 
-7. **Enhance documentation** (2-6 hours)
-   - Example automations
-   - Detailed troubleshooting guide
+**Enhance documentation** (2-6 hours)
+- Example automations
+- Detailed troubleshooting guide
 
 ---
 
 ## Path to Each Tier
 
-### Bronze Tier - 35 minutes + approval time
-1. ⚠️ Submit brands PR (30 min)
-2. ⚠️ Fix config paths (5 min - only pyproject.toml line 99 and makefile line 19)
-3. ⚠️ Wait for approval (3-7 days)
+### Bronze Tier - 30 minutes + approval time
+1. Submit brands PR (30 min)
+2. Wait for approval (3-7 days)
 
-**Progress**: 🎯 90% complete
+**Progress**: 🎯 95% complete (all technical work done)
 
-### Silver Tier - 8-16 hours after Bronze
-1. ✅ Complete Bronze
-2. ⚠️ Increase test coverage 85%→90%+ (6-10 hours)
-3. ✅ All other requirements met
+### Silver Tier - 6-10 hours after Bronze
+1. Complete Bronze (brands PR approval)
+2. Increase test coverage 85%→90%+ (6-10 hours)
 
-**Progress**: 🎯 85% ready
+**Progress**: 🎯 85% ready (only test coverage gap)
 
 ### Gold Tier - Challenging
 - **Blocker**: Automatic discovery may not be possible (cloud-only service)
@@ -235,28 +212,20 @@
 - Comprehensive testing and modern tooling
 - Robust WebSocket + polling architecture
 
-**Certification Status**: **Bronze-Ready** (85% complete)
-- Only administrative steps remain
-- Technical requirements fully met
+**Certification Status**: **Bronze-Ready** (95% complete)
+- Only brands PR submission remains
+- All technical requirements met
 
 **Timeline to Bronze**:
-- **Your work**: 35 minutes (down from 40)
+- **Your work**: 30 minutes
 - **Wait time**: 3-7 days (PR approval)
 - **After approval**: Submit to HACS default repository
 
 **Next Steps**:
-1. Submit brands PR (`branding/README.md` has full guide) - 30 min
-2. Fix config file paths (pyproject.toml line 99, makefile line 19) - 5 min
-3. Wait for approval (3-7 days)
-4. Achieve Bronze tier ✅
-5. Submit to HACS default repository ✅
+1. Submit brands PR - 30 min
+2. Wait for approval (3-7 days)
+3. Achieve Bronze tier ✅
+4. Submit to HACS default repository ✅
 
 **Potential**: Can reach Silver tier with 8-16 hours additional work (mainly test coverage)
 
-**Recent Progress Summary**:
-- Type hints improved from 68% → 87% (+19%)
-- WebSocket alarm state handling completed
-- Docker test environment configured
-- Makefile enhanced with packaging and docker commands
-- External API documentation created
-- Comprehensive project documentation (README, CLAUDE.md)

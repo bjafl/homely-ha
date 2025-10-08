@@ -92,7 +92,7 @@ Claude AI has been used in development. See [CLAUDE.md](CLAUDE.md) for generated
 ```bash
 pip install -e ".[dev]"
 pre-commit install
-pytest                    # Run tests (85% coverage)
+pytest                    
 ruff check . && mypy custom_components/homely
 ```
 
@@ -115,28 +115,6 @@ Access at `http://localhost:8123`. The integration is automatically available at
 
 Configuration stored in `.ha_docker_test/config/`.
 
-*Note: If you need `sudo` for docker commands, add yourself to the docker group: `sudo usermod -aG docker $USER` (logout/login required)*
-
----
-
-## Troubleshooting
-
-**WebSocket not updating**
-- Check logs for connection errors
-- Integration auto-reconnects (exponential backoff)
-- REST polling continues as fallback
-- Use "Trigger Refresh" button for manual update
-
-**Authentication errors**
-- Verify credentials match Homely app
-- Token refresh is automatic
-- Reload integration if issues persist
-
-**No entities**
-- Ensure at least one location selected during setup
-- Check Homely system has configured devices
-- Review HA logs for errors
-
 ---
 
 ## Known Limitations
@@ -155,53 +133,20 @@ Configuration stored in `.ha_docker_test/config/`.
 4. Run `pre-commit run --all-files`
 5. Submit PR
 
-See [QUALITY_ASSESSMENT.md](QUALITY_ASSESSMENT.md) for quality standards.
-
 ---
 
 ## Project Status
 
 **Version**: 0.1.0 (Beta)
-**Quality Tier**: Bronze-Ready (90% complete)
+**Quality Tier**: Bronze-Ready (95% complete)
 **Type Coverage**: 87% (116/133 functions)
 **Test Coverage**: 85%
-
-### Recent Improvements
-- ✅ WebSocket alarm state updates
-- ✅ Docker test environment
-- ✅ MyPy clean, comprehensive docstrings
-- ✅ Branding assets created
-- ✅ API documentation (bjafl/homely-api-docs)
-
-### Roadmap
-
-**High Priority (v1.0)**
-- [ ] Submit to home-assistant/brands (30 min + approval wait)
-- [ ] Fix config paths in pyproject.toml line 99
-- [ ] Alarm control platform (arm/disarm/arm_night/arm_home)
-- [ ] Submit to HACS default repository
-
-**Medium Priority (v1.1+)**
-- [ ] Increase test coverage to 90%+
-- [ ] Complete type hints (17 functions remaining)
-- [ ] Configuration options (polling intervals, entity filtering)
-- [ ] Example automations documentation
-
-**Low Priority (v1.2+)**
-- [ ] Diagnostic sensors (connection status, API metrics)
-- [ ] Additional translations
-- [ ] Performance optimizations
 
 ---
 
 ### Quality Metrics
 
-- **Type annotations**: 87% (up from 68%, target: 100%)
-- **Test coverage**: 85% (Bronze ✅, Silver needs 90%+)
-- **Linting**: Clean (ruff + mypy)
-- **Docstrings**: Needs review
-
-See [QUALITY_ASSESSMENT.md](QUALITY_ASSESSMENT.md) for detailed analysis.
+See [QUALITY_ASSESSMENT.md](QUALITY_ASSESSMENT.md) for ai generated analysis.
 
 ---
 
