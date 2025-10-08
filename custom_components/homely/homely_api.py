@@ -388,15 +388,15 @@ class HomelyHomeState(HomeResponse):
             target_state.value = change.value
             target_state.last_updated = change.last_updated
 
-    def _process_ws_alarm_state_update(self, updateData: WsAlarmChangeData) -> None:
+    def _process_ws_alarm_state_update(self, update_data: WsAlarmChangeData) -> None:
         """Update alarm state based on alarm change event data."""
-        location_id = str(updateData.location_id)
+        location_id = str(update_data.location_id)
         if location_id != str(self.location_id):
             raise HomelyStateUpdateLocationMismatchError(
                 f"Location ID {location_id} in update does not match"
                 + f" location ID {self.location_id} of this home state"
             )
-        self.alarm_state = updateData.state
+        self.alarm_state = update_data.state
 
 
 class HomelyWebSocketClient:
