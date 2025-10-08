@@ -70,7 +70,8 @@ test_credentials.json
 .secrets
 .env.local
 
-.ha_test_server/
+.ha_docker_test/
 .VSCodeCounter/
 .local/
 .*cache/
+.claude/

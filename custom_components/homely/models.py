@@ -485,6 +485,10 @@ class WsAlarmChangeData(BaseModel):
 
     location_id: Annotated[UUID, Field(alias="locationId")]
     state: AlarmState
+    user_id: Annotated[UUID | None, Field(alias="userId")] = None
+    user_name: Annotated[str | None, Field(alias="userName")] = None
+    timestamp: Annotated[datetime, Field(alias="timestamp")]
+    event_id: Annotated[int | str | None, Field(alias="eventId")] = None
 
 
 # TODO: unsure about the exact model here...

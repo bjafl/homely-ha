@@ -48,7 +48,7 @@ class HomelyStateUpdateError(HomelyError):
     """Error updating state from WebSocket event."""
 
 
-class HomelyStateUdateLocationMismatchError(HomelyStateUpdateError):
+class HomelyStateUpdateLocationMismatchError(HomelyStateUpdateError):
     """Location ID in update does not match location ID of this home state."""
 
 

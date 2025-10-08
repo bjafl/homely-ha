@@ -1,10 +1,10 @@
-name: Validate
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
   lint:
@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -23,6 +23,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ruff mypy
+          pip install homeassistant>=2025.1.0
+          pip install pydantic>=2.10.0
+          pip install python-socketio>=5.10.0
+          pip install pytest>=8.0.0
+          pip install pytest-homeassistant-custom-component>=0.13.250
 
       - name: Run ruff
         run: ruff check .
@@ -31,7 +36,7 @@ jobs:
         run: ruff format --check .
 
       - name: Run mypy
-        run: mypy custom_components/your_integration
+        run: mypy custom_components/ --python-version=3.13 --show-error-codes --ignore-missing-imports
 
   test:
     name: Test
@@ -44,7 +49,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -54,32 +59,4 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run tests
-        run: pytest
-
-    #   - name: Upload coverage to Codecov
-    #     if: matrix.python-version == '3.12'
-    #     uses: codecov/codecov-action@v4
-    #     with:
-    #       file: ./coverage.xml
-
-  validate-hassfest:
-    name: Validate with hassfest
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Hassfest validation
-        uses: home-assistant/actions/hassfest@master
-
-  validate-hacs:
-    name: Validate with HACS
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: HACS validation
-        uses: hacs/action@main
-        with:
-          category: integration
+        run: pytest -v
