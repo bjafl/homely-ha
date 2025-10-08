@@ -74,3 +74,4 @@ test_credentials.json
 .VSCodeCounter/
 .local/
 .*cache/
+.claude/

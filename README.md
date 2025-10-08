@@ -162,51 +162,44 @@ See [QUALITY_ASSESSMENT.md](QUALITY_ASSESSMENT.md) for quality standards.
 ## Project Status
 
 **Version**: 0.1.0 (Beta)
-**Quality Tier**: Bronze-Ready (pending brands PR)
+**Quality Tier**: Bronze-Ready (90% complete)
+**Type Coverage**: 87% (116/133 functions)
+**Test Coverage**: 85%
+
+### Recent Improvements
+- ✅ WebSocket alarm state updates
+- ✅ Docker test environment
+- ✅ MyPy clean, comprehensive docstrings
+- ✅ Branding assets created
+- ✅ API documentation (bjafl/homely-api-docs)
 
 ### Roadmap
 
-**High Priority**
-- [ ] Alarm control (arm/disarm/arm_night/arm_home)
+**High Priority (v1.0)**
+- [ ] Submit to home-assistant/brands (30 min + approval wait)
+- [ ] Fix config paths in pyproject.toml line 99
+- [ ] Alarm control platform (arm/disarm/arm_night/arm_home)
 - [ ] Submit to HACS default repository
-- [ ] Add to home-assistant/brands
 
-**Medium Priority**
+**Medium Priority (v1.1+)**
 - [ ] Increase test coverage to 90%+
+- [ ] Complete type hints (17 functions remaining)
 - [ ] Configuration options (polling intervals, entity filtering)
-- [ ] Enhanced documentation with examples
+- [ ] Example automations documentation
 
-**Low Priority**
+**Low Priority (v1.2+)**
 - [ ] Diagnostic sensors (connection status, API metrics)
 - [ ] Additional translations
 - [ ] Performance optimizations
 
-See [README TODO section](#todo) for full list.
-
 ---
 
-## Review Recommendations
+### Quality Metrics
 
-### Critical Issues
-
-1. **Branding Assets** ⚠️ READY
-   - Assets created in `branding/homely/`
-   - Need to submit PR to home-assistant/brands
-   - Timeline: 30 min + 3-7 days approval
-
-2. **Config File Paths** ⚠️ NEEDS FIX
-   - pyproject.toml lines 99, 175, 178
-   - makefile line 19
-   - Change `your_integration` → `homely`
-
-3. **Manifest.json** ✅ FIXED
-   - iot_class corrected to `cloud_push`
-
-### Improvement Areas
-
-- **Type annotations**: 68% coverage (target: 100%)
-- **Test coverage**: 85% (Bronze OK, Silver needs 90%+)
-- **Missing features**: Alarm control, state change notifications
+- **Type annotations**: 87% (up from 68%, target: 100%)
+- **Test coverage**: 85% (Bronze ✅, Silver needs 90%+)
+- **Linting**: Clean (ruff + mypy)
+- **Docstrings**: Needs review
 
 See [QUALITY_ASSESSMENT.md](QUALITY_ASSESSMENT.md) for detailed analysis.
 
