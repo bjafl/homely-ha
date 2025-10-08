@@ -1,0 +1,13 @@
+services:
+  homeassistant:
+    container_name: homeassistant-dev
+    image: homeassistant/home-assistant:latest
+    volumes:
+      - ./.ha_docker_test/config:/config
+      - ./custom_components:/.ha_docker_test/config/custom_components
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      - TZ=Europe/Oslo
