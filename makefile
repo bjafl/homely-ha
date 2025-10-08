@@ -19,12 +19,12 @@ install:
 	pre-commit install
 
 lint:
-	ruff check custom_components/homely
+	ruff check .
 	mypy custom_components/homely
 
 
 format:
-	ruff format custom_components/homely
+	ruff format .
 	ruff check --fix .
 
 test:
