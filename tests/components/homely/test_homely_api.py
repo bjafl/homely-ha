@@ -13,7 +13,7 @@ from custom_components.homely.exceptions import (
     HomelyAuthInvalidError,
     HomelyAuthRequestError,
     HomelyRequestError,
-    HomelyStateUdateLocationMismatchError,
+    HomelyStateUpdateLocationMismatchError,
     HomelyStateUpdateError,
     HomelyStateUpdateMissingTargetError,
     HomelyStateUpdateOutOfOrderError,
@@ -357,7 +357,7 @@ class TestHomelyHomeState:
 
         # Test wrong location ID
         ws_event.data.root_location_id = uuid4()
-        with pytest.raises(HomelyStateUdateLocationMismatchError):
+        with pytest.raises(HomelyStateUpdateLocationMismatchError):
             home_state._process_ws_device_state_update(ws_event.data)
 
     def test_update_state(self, mock_simple_home_state: HomelyHomeState):

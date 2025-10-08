@@ -32,7 +32,7 @@ from .exceptions import (
     HomelyError,
     HomelyNetworkError,
     HomelyRequestError,
-    HomelyStateUdateLocationMismatchError,
+    HomelyStateUpdateLocationMismatchError,
     HomelyStateUpdateError,
     HomelyStateUpdateMissingTargetError,
     HomelyStateUpdateOutOfOrderError,
@@ -352,7 +352,7 @@ class HomelyHomeState(HomeResponse):
         # Validate location ID
         location_id = str(update_data.root_location_id)
         if location_id != str(self.location_id):
-            raise HomelyStateUdateLocationMismatchError(
+            raise HomelyStateUpdateLocationMismatchError(
                 f"Location ID {location_id} in update does not match"
                 + f" location ID {self.location_id} of this home state"
             )
