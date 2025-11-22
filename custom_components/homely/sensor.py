@@ -174,7 +174,7 @@ class HomelyAlarmStateSensor(
 
     _ALARM_STATE_MAP = {
         AlarmState.DISARMED: AlarmControlPanelState.DISARMED,
-        AlarmState.ARMED_PARTLY: AlarmControlPanelState.ARMED_HOME,
+        AlarmState.ARMED_STAY: AlarmControlPanelState.ARMED_HOME,
         AlarmState.ARMED_AWAY: AlarmControlPanelState.ARMED_AWAY,
         AlarmState.ARMED_NIGHT: AlarmControlPanelState.ARMED_NIGHT,
         AlarmState.ALARM_STAY_PENDING: AlarmControlPanelState.ARMING,
