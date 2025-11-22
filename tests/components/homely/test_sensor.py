@@ -333,7 +333,7 @@ class TestHomelyAlarmStateSensor:
         test_cases = [
             (AlarmState.DISARMED, AlarmControlPanelState.DISARMED),
             (AlarmState.ARMED_AWAY, AlarmControlPanelState.ARMED_AWAY),
-            (AlarmState.ARMED_PARTLY, AlarmControlPanelState.ARMED_HOME),
+            (AlarmState.ARMED_STAY, AlarmControlPanelState.ARMED_HOME),
             (AlarmState.ARMED_NIGHT, AlarmControlPanelState.ARMED_NIGHT),
             (AlarmState.BREACHED, AlarmControlPanelState.TRIGGERED),
             (AlarmState.ALARM_PENDING, AlarmControlPanelState.PENDING),
@@ -354,7 +354,7 @@ class TestHomelyAlarmStateSensor:
 
         test_cases = [
             (AlarmState.DISARMED, HomelyEntityIcons.ALARM_DISARMED),
-            (AlarmState.ARMED_PARTLY, HomelyEntityIcons.ALARM_ARMED_HOME),
+            (AlarmState.ARMED_STAY, HomelyEntityIcons.ALARM_ARMED_HOME),
             (AlarmState.ARMED_AWAY, HomelyEntityIcons.ALARM_ARMED_AWAY),
             (AlarmState.ARMED_NIGHT, HomelyEntityIcons.ALARM_ARMED_NIGHT),
             (AlarmState.BREACHED, HomelyEntityIcons.ALARM_TRIGGERED),
