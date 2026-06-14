@@ -80,6 +80,15 @@ class HomelyAuthRequestError(HomelyAuthInvalidError, HomelyRequestError):
         super().__init__(message, error)
 
 
+class HomelyRateLimitError(HomelyRequestError):
+    """Rate limit exceeded - retry after delay."""
+
+    def __init__(self, message: str, retry_after: int = 60, error: ErrorResponse | None = None) -> None:
+        """Initialize with retry_after seconds."""
+        super().__init__(message, error)
+        self.retry_after = retry_after
+
+
 class HomelyServiceUnavailableError(HomelyNetworkError):
     """Service temporarily unavailable - will retry setup."""
 

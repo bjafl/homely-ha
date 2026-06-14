@@ -20,6 +20,7 @@ from .exceptions import (
     HomelyAuthExpiredError,
     HomelyAuthInvalidError,
     HomelyNetworkError,
+    HomelyRateLimitError,
 )
 from .homely_api import HomelyApi
 
@@ -52,8 +53,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("No locations found for this account")
             raise ConfigEntryNotReady("No locations available")
 
-        # Update config entry with latest available locations
-        location_id_names = await api.get_location_id_names()
+        # Reuse the already-fetched locations to avoid extra API calls
+        location_id_names = {str(loc.location_id): loc.name for loc in locations}
         hass.config_entries.async_update_entry(
             entry,
             data={
@@ -62,6 +63,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             },
         )
 
+    except HomelyRateLimitError as err:
+        _LOGGER.warning("Rate limited during location fetch: %s", err)
+        raise ConfigEntryNotReady(f"Homely API rate limited, retry after {err.retry_after}s") from err
     except HomelyNetworkError as err:
         _LOGGER.error("Failed to fetch locations: %s", err)
         raise ConfigEntryNotReady from err
@@ -71,13 +75,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create coordinator
     coordinator = HomelyDataUpdateCoordinator(hass, entry, api, selected_locations)
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady as err:
+        if "rate" in str(err).lower():
+            _LOGGER.warning("Rate limited during first refresh, will retry later: %s", err)
+        raise
 
-    # Validate selected locations exist
-    available_locations = await api.get_location_id_names()
-    _LOGGER.debug("Available locations: %s", available_locations)
+    # Reuse cached locations to avoid an extra API call
     valid_selected = [
-        loc_id for loc_id in selected_locations if str(loc_id) in available_locations
+        loc_id for loc_id in selected_locations if str(loc_id) in location_id_names
     ]
 
     if not valid_selected:

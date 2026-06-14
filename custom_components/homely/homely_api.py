@@ -31,6 +31,7 @@ from .exceptions import (
     HomelyAuthRequestError,
     HomelyError,
     HomelyNetworkError,
+    HomelyRateLimitError,
     HomelyRequestError,
     HomelyStateUpdateLocationMismatchError,
     HomelyStateUpdateError,
@@ -174,7 +175,18 @@ class HomelyApi:
                         f"Unexpected value for request_type: {request_type}"
                     )
                 self._logger.debug("Response received: %s", response)
+                if response.status == 429:
+                    try:
+                        data = await response.json()
+                        retry_after = int(data.get("retryAfter", 60))
+                    except Exception:
+                        retry_after = 60
+                    raise HomelyRateLimitError(
+                        f"Rate limited, retry after {retry_after}s", retry_after
+                    )
                 return response
+        except HomelyRateLimitError:
+            raise
         except TimeoutError:
             raise HomelyNetworkError("Request timed out")
         except aiohttp.ClientError as e:
