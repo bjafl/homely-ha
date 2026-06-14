@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -28,10 +29,24 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
+# Module-level rate limit tracker — persists across setup retries within the same HA run.
+# This prevents rapid setup retries from repeatedly hitting the API and resetting the
+# rate-limit sliding window, which would otherwise create a deadlock.
+_rate_limited_until: float = 0
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Homely from a config entry."""
+    global _rate_limited_until
     _LOGGER.debug("Setting up Homely integration for entry %s", entry.entry_id)
+
+    now = asyncio.get_event_loop().time()
+    if now < _rate_limited_until:
+        remaining = _rate_limited_until - now
+        _LOGGER.warning(
+            "Skipping setup attempt — Homely API rate limited for %.0fs more", remaining
+        )
+        raise ConfigEntryNotReady(f"Homely API rate limited, retry in {remaining:.0f}s")
 
     session = async_get_clientsession(hass)
     api = HomelyApi(session, logger=_LOGGER)
@@ -64,6 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     except HomelyRateLimitError as err:
+        _rate_limited_until = asyncio.get_event_loop().time() + err.retry_after
         _LOGGER.warning("Rate limited during location fetch: %s", err)
         raise ConfigEntryNotReady(f"Homely API rate limited, retry after {err.retry_after}s") from err
     except HomelyNetworkError as err:
@@ -77,9 +93,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         await coordinator.async_config_entry_first_refresh()
-    except ConfigEntryNotReady as err:
-        if "rate" in str(err).lower():
-            _LOGGER.warning("Rate limited during first refresh, will retry later: %s", err)
+    except ConfigEntryNotReady:
+        if coordinator.rate_limited_until > asyncio.get_event_loop().time():
+            _rate_limited_until = coordinator.rate_limited_until
+            _LOGGER.warning(
+                "Rate limited during first refresh, blocking setup retries for %.0fs",
+                _rate_limited_until - asyncio.get_event_loop().time(),
+            )
         raise
 
     # Reuse cached locations to avoid an extra API call

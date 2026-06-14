@@ -66,6 +66,11 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         return self.api.locations
 
     @property
+    def rate_limited_until(self) -> float:
+        """Return the event loop time until which we are rate limited (0 if not)."""
+        return self._rate_limited_until
+
+    @property
     def update_interval(self) -> timedelta:
         """Dynamic update interval based on WebSocket status."""
         active_websockets = sum(1 for active in self._ws_active.values() if active)
