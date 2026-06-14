@@ -178,7 +178,9 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
                 response = await self.api.get_home(loc_id)
                 new_data[loc_id] = HomelyHomeState.from_response(response)
         except HomelyRateLimitError as err:
-            self._rate_limited_until = asyncio.get_event_loop().time() + err.retry_after
+            # Wait 5× the reported retry_after — Homely's actual rate limit window
+            # appears to be longer than the reported value.
+            self._rate_limited_until = asyncio.get_event_loop().time() + (err.retry_after * 5)
             _LOGGER.warning("Rate limited by Homely API: %s", err)
             if self.data:
                 return self.data
