@@ -333,7 +333,7 @@ class TestHomelyAlarmStateSensor:
         test_cases = [
             (AlarmState.DISARMED, AlarmControlPanelState.DISARMED),
             (AlarmState.ARMED_AWAY, AlarmControlPanelState.ARMED_AWAY),
-            (AlarmState.ARMED_STAY, AlarmControlPanelState.ARMED_HOME),
+            (AlarmState.ARMED_PARTLY, AlarmControlPanelState.ARMED_HOME),
             (AlarmState.ARMED_NIGHT, AlarmControlPanelState.ARMED_NIGHT),
             (AlarmState.BREACHED, AlarmControlPanelState.TRIGGERED),
             (AlarmState.ALARM_PENDING, AlarmControlPanelState.PENDING),
@@ -354,7 +354,7 @@ class TestHomelyAlarmStateSensor:
 
         test_cases = [
             (AlarmState.DISARMED, HomelyEntityIcons.ALARM_DISARMED),
-            (AlarmState.ARMED_STAY, HomelyEntityIcons.ALARM_ARMED_HOME),
+            (AlarmState.ARMED_PARTLY, HomelyEntityIcons.ALARM_ARMED_HOME),
             (AlarmState.ARMED_AWAY, HomelyEntityIcons.ALARM_ARMED_AWAY),
             (AlarmState.ARMED_NIGHT, HomelyEntityIcons.ALARM_ARMED_NIGHT),
             (AlarmState.BREACHED, HomelyEntityIcons.ALARM_TRIGGERED),
@@ -435,6 +435,7 @@ class TestHomelySignalStrengthSensor:
         state_value = 85
         mock_state = create_mock_sensor_state(state_value, last_updated)
         mock_device_valid = MagicMock()
+        mock_device_valid.features.diagnostic.states.signal_strength = None
         mock_device_valid.features.diagnostic.states.network_link_strength = mock_state
         mock_device_valid.features.diagnostic.states.network_link_address = None
         mock_get_device_valid_state = MagicMock(return_value=mock_device_valid)
@@ -467,6 +468,7 @@ class TestHomelySignalStrengthSensor:
                     strength_value, datetime.now(tz=UTC)
                 )
                 mock_device_valid = MagicMock()
+                mock_device_valid.features.diagnostic.states.signal_strength = None
                 mock_device_valid.features.diagnostic.states.network_link_strength = (
                     mock_state
                 )

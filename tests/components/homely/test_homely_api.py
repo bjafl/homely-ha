@@ -1,12 +1,17 @@
+import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from uuid import uuid4
 
+import aiohttp
 import pytest
-import socketio
-import socketio.exceptions
+from aiohttp import ClientWebSocketResponse, WSMsgType
 
-from custom_components.homely.const import HomelyUrls
+from custom_components.homely.const import (
+    APP_API_CLIENT_ID,
+    APP_API_CLIENT_SECRET,
+    HomelyUrls,
+)
 from custom_components.homely.exceptions import (
     HomelyAuthError,
     HomelyAuthExpiredError,
@@ -74,7 +79,13 @@ class TestHomelyApi:
         await api.login(TEST_USER_ID, TEST_PASSWORD)
         mock_post.assert_called_once_with(
             HomelyUrls.AUTH_LOGIN,
-            json={"username": TEST_USER_ID, "password": TEST_PASSWORD},
+            json={
+                "client_id": APP_API_CLIENT_ID,
+                "client_secret": APP_API_CLIENT_SECRET,
+                "grant_type": "password",
+                "username": TEST_USER_ID,
+                "password": TEST_PASSWORD,
+            },
         )
         assert api._auth is not None
         assert api._auth.access_token == FAKE_TOKEN_RESPONSE["access_token"]
@@ -101,7 +112,13 @@ class TestHomelyApi:
             await api.login("invalid_user", "wrong_password")
         mock_post.assert_called_once_with(
             HomelyUrls.AUTH_LOGIN,
-            json={"username": "invalid_user", "password": "wrong_password"},
+            json={
+                "client_id": APP_API_CLIENT_ID,
+                "client_secret": APP_API_CLIENT_SECRET,
+                "grant_type": "password",
+                "username": "invalid_user",
+                "password": "wrong_password",
+            },
         )
         assert api.is_authenticated is False
 
@@ -119,7 +136,12 @@ class TestHomelyApi:
         await api._ensure_token_valid()
         mock_post.assert_called_once_with(
             HomelyUrls.AUTH_REFRESH,
-            json={"refresh_token": refresh_token},
+            json={
+                "client_id": APP_API_CLIENT_ID,
+                "client_secret": APP_API_CLIENT_SECRET,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
         )
         assert api.is_authenticated is True
 
@@ -224,12 +246,13 @@ class TestHomelyApi:
     ):
         """Test get_home method of HomelyApi with invalid response."""
         api = api_logged_in_with_locations
-        # Missing required nested structure raises HomelyValidationError (KeyError → caught)
+        # Both requests return 200 but missing nested structure → KeyError → HomelyValidationError
         invalid_response = create_mock_response(200, {"invalid": "data"})
         api._client_session.get = AsyncMock(return_value=invalid_response)
         with pytest.raises(HomelyValidationError):
             await api.get_home(TEST_LOCATION_ID)
-        api._client_session.get.assert_called_once()
+        # Both home and alarm endpoints are called before the parse error is raised
+        assert api._client_session.get.call_count == 2
 
 
 class TestHomelyHomeState:
@@ -399,186 +422,177 @@ class TestHomelyHomeState:
 
 
 class TestHomelyWebSocketClient:
-    """Test Homely WebSocket client."""
+    """Test Homely WebSocket client (EIO=3 / aiohttp)."""
+
+    def _make_client(self, api: HomelyApi) -> HomelyWebSocketClient:
+        return HomelyWebSocketClient(api, TEST_LOCATION_ID, name="TestClient")
+
+    def _build_mock_ws(
+        self, auth_data: str = '42["authenticated",true]'
+    ) -> MagicMock:
+        """Build a mock WS with a valid EIO=3 handshake sequence."""
+        mock_ws = MagicMock(spec=ClientWebSocketResponse)
+        mock_ws.closed = False
+        mock_ws.send_str = AsyncMock()
+        mock_ws.receive = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    type=WSMsgType.TEXT,
+                    data='0{"pingInterval":25000,"pingTimeout":5000}',
+                ),
+                MagicMock(type=WSMsgType.TEXT, data="40"),
+                MagicMock(type=WSMsgType.TEXT, data=auth_data),
+            ]
+        )
+        return mock_ws
 
     def test_init(self, api_logged_in_with_locations: HomelyApi):
         """Test initialization of HomelyWebSocketClient."""
-
-        ws_client = HomelyWebSocketClient(
-            api_logged_in_with_locations, TEST_LOCATION_ID, name="TestClient"
-        )
+        ws_client = self._make_client(api_logged_in_with_locations)
         assert ws_client._api == api_logged_in_with_locations
         assert ws_client.location_id == TEST_LOCATION_ID
-        assert ws_client._sio is not None
         assert ws_client.name == "TestClient"
         assert ws_client.connected is False
+        assert ws_client._ws is None
 
-    async def test_valid_connect(
-        self, mock_homely_websocket_client: HomelyWebSocketClient
+    async def test_connect_success(self, api_logged_in_with_locations: HomelyApi):
+        """Test successful EIO=3 WebSocket connection and authentication."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        mock_ws = self._build_mock_ws()
+        api_logged_in_with_locations._client_session.ws_connect = AsyncMock(
+            return_value=mock_ws
+        )
+        connect_cb = MagicMock()
+        ws_client.register_event_callback(connect_cb, "connect")
+
+        await ws_client.connect()
+
+        assert ws_client.connected is True
+        connect_cb.assert_called_once()
+        # Verify auth payload sent with token and locationId
+        mock_ws.send_str.assert_called_once()
+        sent = mock_ws.send_str.call_args[0][0]
+        assert '"authentication"' in sent
+        assert TEST_LOCATION_ID in sent
+        # Verify WS URL contains required query params
+        ws_connect_url: str = api_logged_in_with_locations._client_session.ws_connect.call_args[0][0]
+        assert f"locationId={TEST_LOCATION_ID}" in ws_connect_url
+        assert "EIO=3" in ws_connect_url
+
+    async def test_connect_with_ack_id_in_auth_response(
+        self, api_logged_in_with_locations: HomelyApi
     ):
-        """Test valid sio connection attempt for HomelyWebSocketClient."""
-        ws_client = mock_homely_websocket_client
-        assert ws_client._location_id == TEST_LOCATION_ID  # Expects this from fixture
-        fake_token = "test_token"
-        fake_auth_header = {"Authorization": f"Bearer {fake_token}"}
-        mock_get_auth_header = AsyncMock(return_value=fake_auth_header)
-        ws_client._api._get_auth_header = mock_get_auth_header
-        ws_client._setup_sio_events = MagicMock()
+        """Auth response with numeric ack ID (421[...]) must succeed."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        mock_ws = self._build_mock_ws(auth_data='421["authenticated",true]')
+        api_logged_in_with_locations._client_session.ws_connect = AsyncMock(
+            return_value=mock_ws
+        )
+        await ws_client.connect()  # must not raise
 
-        ws_client._sio.connected = True  # Simulate successful connection
-        with patch.object(
-            type(ws_client._api), "access_token", new_callable=PropertyMock
-        ) as mock_access_token:
-            mock_access_token.return_value = fake_token
-            await ws_client.connect()  # mocked in fixture
-
-        ws_client._setup_sio_events.assert_called_once()
-
-        # Verify the URL contains properly encoded token
-        sio_connect: AsyncMock = ws_client._sio.connect  # type: ignore
-        call_args = sio_connect.call_args
-
-        url: str = call_args[0][0]
-        assert f"locationId={TEST_LOCATION_ID}" in url
-        assert f"token=Bearer%20{fake_token}" in url
-        assert url.startswith(HomelyUrls.WEBSOCKET)
-
-        headers: dict = call_args[1]["headers"]
-        assert headers.get("Authorization") == fake_auth_header["Authorization"]
-        assert headers.get("locationId") == TEST_LOCATION_ID
-
-    async def test_invalid_connect_api_err(
-        self, mock_homely_websocket_client: HomelyWebSocketClient
-    ):
-        """Test invalid sio connection attempt for HomelyWebSocketClient."""
-        ws_client = mock_homely_websocket_client
-        api = ws_client._api
-        api._get_auth_header = AsyncMock(
-            side_effect=HomelyAuthError("Mocked auth error")
+    async def test_connect_api_auth_error(self, api_logged_in_with_locations: HomelyApi):
+        """HomelyAuthError during token fetch is wrapped as HomelyWebSocketError."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        api_logged_in_with_locations._get_auth_header = AsyncMock(
+            side_effect=HomelyAuthError("Auth failed")
         )
         with pytest.raises(HomelyWebSocketError):
             await ws_client.connect()
 
-        api._get_auth_header = AsyncMock(return_value="Mocked")
+    async def test_connect_no_access_token(
+        self, api_logged_in_with_locations: HomelyApi
+    ):
+        """None access_token after auth header fetch raises HomelyWebSocketError."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        api_logged_in_with_locations._get_auth_header = AsyncMock(return_value={})
         with patch.object(
-            type(api), "access_token", new_callable=PropertyMock
-        ) as mock_access_token:
-            mock_access_token.return_value = None
+            type(api_logged_in_with_locations), "access_token", new_callable=PropertyMock
+        ) as mock_tok:
+            mock_tok.return_value = None
             with pytest.raises(HomelyWebSocketError):
                 await ws_client.connect()
 
-    async def test_invalid_connect_sio_err(
-        self, mock_homely_websocket_client: HomelyWebSocketClient
-    ):
-        """Test invalid sio connection attempt for HomelyWebSocketClient."""
-        ws_client = mock_homely_websocket_client
-        ws_client._setup_sio_events = MagicMock()
-        sio = ws_client._sio
-
-        sio.connected = False  # Simulate failed connection
-        with pytest.raises(HomelyWebSocketError):
-            await ws_client.connect()
-
-        sio.connect = AsyncMock(
-            side_effect=socketio.exceptions.ConnectionError("Mocked sio connect error")
+    async def test_connect_network_error(self, api_logged_in_with_locations: HomelyApi):
+        """aiohttp.ClientError during ws_connect is wrapped as HomelyWebSocketError."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        api_logged_in_with_locations._client_session.ws_connect = AsyncMock(
+            side_effect=aiohttp.ClientError("Connection refused")
         )
         with pytest.raises(HomelyWebSocketError):
             await ws_client.connect()
 
-        sio.connect = AsyncMock(side_effect=ValueError("Mocked invalid params error"))
+    async def test_connect_bad_eio_open(self, api_logged_in_with_locations: HomelyApi):
+        """Non-'0' first frame raises HomelyWebSocketError."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        mock_ws = MagicMock(spec=ClientWebSocketResponse)
+        mock_ws.closed = False
+        mock_ws.receive = AsyncMock(
+            return_value=MagicMock(type=WSMsgType.TEXT, data="garbage")
+        )
+        api_logged_in_with_locations._client_session.ws_connect = AsyncMock(
+            return_value=mock_ws
+        )
         with pytest.raises(HomelyWebSocketError):
             await ws_client.connect()
 
-        sio.connect = AsyncMock(side_effect=TimeoutError("Mocked timeout error"))
+    async def test_connect_auth_rejected(self, api_logged_in_with_locations: HomelyApi):
+        """Server responding authenticated=false raises HomelyWebSocketError."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        mock_ws = self._build_mock_ws(auth_data='42["authenticated",false]')
+        api_logged_in_with_locations._client_session.ws_connect = AsyncMock(
+            return_value=mock_ws
+        )
         with pytest.raises(HomelyWebSocketError):
             await ws_client.connect()
 
-        sio.connect = AsyncMock(side_effect=Exception("Mocked unknown error"))
-        with pytest.raises(HomelyWebSocketError):
-            await ws_client.connect()
-
-    async def test_sio_event_registration(
-        self, mock_homely_websocket_client: HomelyWebSocketClient
+    def test_register_and_unregister_callback(
+        self, api_logged_in_with_locations: HomelyApi
     ):
-        """Test setup of sio events for HomelyWebSocketClient."""
-        ws_client = mock_homely_websocket_client
-        sio = ws_client._sio
-        sio.event = MagicMock(side_effect=lambda func: func)  # Decorator passthrough
-        ws_client._setup_sio_events()
+        """Register and unregister event callbacks."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        cb = MagicMock()
 
-        """Test that event handlers are registered."""
-        # The decorator should have been called for each event
-        assert sio.event.call_count == 3
+        ws_client.register_event_callback(cb, "event")
+        assert cb in ws_client._websocket_event_callbacks["event"]
 
-        # Check that handlers were registered for correct events
-        calls = [str(call) for call in sio.event.call_args_list]
-        assert any("connect" in str(call) for call in calls)
-        assert any("disconnect" in str(call) for call in calls)
-        assert any("event" in str(call) for call in calls)
+        ws_client.unregister_event_callback(cb, "event")
+        assert cb not in ws_client._websocket_event_callbacks["event"]
 
-        # # Get registered event handler for testing
-        # event_handler: Callable | None = None
-        # for name, handler in ws_client._sio.handlers.items():
-        #     if name == "event":
-        #         event_handler = handler
-        #         break
-        # assert event_handler is not None
+        # Unregister from all event types at once
+        ws_client.register_event_callback(cb, "event")
+        ws_client.register_event_callback(cb, "connect")
+        ws_client.unregister_event_callback(cb)
+        assert cb not in ws_client._websocket_event_callbacks["event"]
+        assert cb not in ws_client._websocket_event_callbacks["connect"]
 
-    async def test_event_callback(
-        self, mock_homely_websocket_client: HomelyWebSocketClient
+    def test_parse_sio_packet_with_and_without_ack(
+        self, api_logged_in_with_locations: HomelyApi
     ):
-        """Test sio event callback."""
-        ws_client = mock_homely_websocket_client
-        sio = ws_client._sio
-        callback = MagicMock()
-        ws_client.register_event_callback(callback, "event")
+        """_parse_sio_packet strips numeric ack IDs and returns parsed events."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        payload = ["message", {"type": "device-state-changed", "eventData": FAKE_WS_EVENT["data"]}]
 
-        # Capture decorated sio event handlers
-        registered_sio_events = {}
+        # No ack ID
+        raw_no_ack = "42" + json.dumps(payload)
+        ack_id, event = ws_client._parse_sio_packet(raw_no_ack)
+        assert ack_id is None
+        assert event is not None
 
-        def fake_register_event(func):
-            registered_sio_events[func.__name__] = func
-            return func
+        # Numeric ack ID
+        raw_with_ack = "4212" + json.dumps(payload)
+        ack_id, event = ws_client._parse_sio_packet(raw_with_ack)
+        assert ack_id == "12"
+        assert event is not None
 
-        sio.event = fake_register_event
-        ws_client._setup_sio_events()
+    async def test_disconnect(self, api_logged_in_with_locations: HomelyApi):
+        """disconnect() sets flag and closes the underlying WS."""
+        ws_client = self._make_client(api_logged_in_with_locations)
+        mock_ws = MagicMock(spec=ClientWebSocketResponse)
+        mock_ws.closed = False
+        mock_ws.close = AsyncMock()
+        ws_client._ws = mock_ws
 
-        # Simulate handling a WebSocket event
-        event_handler = registered_sio_events.get("event")
-        assert event_handler is not None
-        event_handler(FAKE_WS_EVENT)
+        await ws_client.disconnect()
 
-        callback.assert_called_once()
-        call_args = callback.call_args
-        event_data: WsDeviceChangeEvent = call_args[0][0]
-        assert event_data.type == FAKE_WS_EVENT["type"]
-        assert str(event_data.data.root_location_id) == TEST_LOCATION_ID
-
-        # Test unregistering the callback
-        event_cbs = ws_client._websocket_event_callbacks.get("event", [])
-        assert callback in event_cbs
-        ws_client.unregister_event_callback(callback, "event")
-        event_cbs = ws_client._websocket_event_callbacks.get("event", [])
-        assert callback not in event_cbs
-
-        # Test unregistering from all event types
-
-        ws_client._websocket_event_callbacks["event"] = [callback]
-        ws_client._websocket_event_callbacks["connect"] = [callback]
-
-        # Add dummy to disconnect for coverage
-        def dummy(x):
-            return
-
-        ws_client._websocket_event_callbacks["disconnect"] = [dummy]
-
-        assert callback in ws_client._websocket_event_callbacks["event"]
-        assert callback in ws_client._websocket_event_callbacks["connect"]
-        ws_client.unregister_event_callback(callback)
-        assert callback not in ws_client._websocket_event_callbacks["event"]
-        assert callback not in ws_client._websocket_event_callbacks["connect"]
-
-    def test_reconnect(self, mock_homely_websocket_client: HomelyWebSocketClient):
-        """Test reconnect method of HomelyWebSocketClient."""
-
-        # TODO
+        assert ws_client._should_disconnect is True
+        mock_ws.close.assert_called_once()

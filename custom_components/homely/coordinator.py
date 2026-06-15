@@ -246,9 +246,13 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
 
             await ws.connect()
 
-            # Store the connected client
+            # Store the connected client before launching wait() so the
+            # disconnect callback can find it if the connection drops immediately
             self._ws_clients[location_id] = ws
             self._ws_active[location_id] = True
+
+            # Start the background message loop
+            self.hass.async_create_task(ws.wait())
 
             _LOGGER.info("WebSocket connected for location %s", location_id)
 

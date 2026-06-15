@@ -270,19 +270,27 @@ class HomelyApi:
             url=f"{HomelyUrls.HOME}/{location_id}",
             include_token=True,
         )
+        if not home_resp.ok:
+            try:
+                err_data = await home_resp.json()
+            except Exception:
+                err_data = {}
+            raise HomelyRequestError("Failed to get home", err_data)
         home_data = await home_resp.json()
         self._logger.debug("Json data from get_home response: %s", home_data)
-        if not home_resp.ok:
-            raise HomelyRequestError("Failed to get home", home_data)
 
         alarm_resp = await self._make_request(
             request_type="get",
             url=f"{HomelyUrls.ALARM_STATE}/{location_id}",
             include_token=True,
         )
-        alarm_data = await alarm_resp.json()
         if not alarm_resp.ok:
-            raise HomelyRequestError("Failed to get alarm state", alarm_data)
+            try:
+                err_data = await alarm_resp.json()
+            except Exception:
+                err_data = {}
+            raise HomelyRequestError("Failed to get alarm state", err_data)
+        alarm_data = await alarm_resp.json()
 
         cached_location = self._locations.get(location_id)
         try:
@@ -425,11 +433,11 @@ class HomelyHomeState(HomeResponse):
         ignore_outdated_values: bool = True,
     ) -> None:
         """Update device state based on device change event data."""
-        # Validate location ID
-        location_id = str(update_data.root_location_id)
-        if location_id != str(self.location_id):
+        # Validate location ID — fall back to locationId if rootLocationId is absent
+        effective_loc_id = update_data.root_location_id or update_data.location_id
+        if str(effective_loc_id) != str(self.location_id):
             raise HomelyStateUpdateLocationMismatchError(
-                f"Location ID {location_id} in update does not match"
+                f"Location ID {effective_loc_id} in update does not match"
                 + f" location ID {self.location_id} of this home state"
             )
         # Find target state to update
@@ -579,7 +587,11 @@ class HomelyWebSocketClient:
                 raise HomelyWebSocketError(
                     f"Unexpected auth response: {auth_resp.data!r}"
                 )
-            auth_inner = json.loads(auth_resp.data[2:])
+            rest = auth_resp.data[2:]
+            if rest and rest[0].isdigit():
+                bracket = rest.index("[")
+                rest = rest[bracket:]
+            auth_inner = json.loads(rest)
             if not (auth_inner[0] == "authenticated" and auth_inner[1] is True):
                 raise HomelyWebSocketError(
                     f"Authentication failed: {auth_resp.data!r}"
@@ -731,8 +743,6 @@ class HomelyWebSocketClient:
         finally:
             ping_task.cancel()
             self._handle_event("disconnect")
-            if not self._should_disconnect:
-                await self._try_reconnect()
 
     async def _heartbeat_loop(self) -> None:
         """Send EIO=3 pings to keep the connection alive."""

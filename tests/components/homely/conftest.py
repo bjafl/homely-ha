@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
-import socketio
 from aiohttp import ClientResponse, ClientSession
 from homeassistant.const import CONF_LOCATION, CONF_PASSWORD, CONF_USERNAME
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -515,28 +514,14 @@ def patch_async_create_client_session(mock_session):
 
 
 @pytest.fixture
-def mock_sio():
-    """Fixture for a mock socketio client."""
-    sio = MagicMock(spec=socketio.AsyncClient)
-    sio.connect = AsyncMock()
-    sio.disconnect = AsyncMock()
-    sio.emit = AsyncMock()
-    sio.wait = AsyncMock()
-    sio.connected = False
-    return sio
-
-
-@pytest.fixture
-def mock_homely_websocket_client(mock_sio, api_logged_in_with_locations: HomelyApi):
+def mock_homely_websocket_client(api_logged_in_with_locations: HomelyApi):
     """Fixture for a mock HomelyWebSocketClient."""
-    ws_client = HomelyWebSocketClient(
+    return HomelyWebSocketClient(
         api_logged_in_with_locations,
         TEST_LOCATION_ID,
         logger=MagicMock(),
         name="MockClient",
     )
-    ws_client._sio = mock_sio
-    return ws_client
 
 
 @pytest.fixture
