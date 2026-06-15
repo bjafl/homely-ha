@@ -57,6 +57,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except (HomelyAuthError, HomelyAuthExpiredError, HomelyAuthInvalidError) as err:
         _LOGGER.error("Authentication failed: %s", err)
         raise ConfigEntryAuthFailed from err
+    except HomelyRateLimitError as err:
+        _rate_limited_until = asyncio.get_event_loop().time() + max(120, err.retry_after * 10)
+        _LOGGER.warning("Rate limited during login: %s", err)
+        raise ConfigEntryNotReady(f"Homely API rate limited, retry after {err.retry_after}s") from err
     except HomelyNetworkError as err:
         _LOGGER.error("Network error during setup: %s", err)
         raise ConfigEntryNotReady from err
@@ -79,7 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     except HomelyRateLimitError as err:
-        _rate_limited_until = asyncio.get_event_loop().time() + err.retry_after
+        _rate_limited_until = asyncio.get_event_loop().time() + max(120, err.retry_after * 10)
         _LOGGER.warning("Rate limited during location fetch: %s", err)
         raise ConfigEntryNotReady(f"Homely API rate limited, retry after {err.retry_after}s") from err
     except HomelyNetworkError as err:
