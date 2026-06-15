@@ -459,7 +459,7 @@ class HomelyWebSocketClient:
         return self._ws is not None and not self._ws.closed
 
     async def connect(self) -> None:
-        """Connect using EIO=3 (Socket.IO v2) protocol."""
+        """Connect using EIO=3 (Socket.IO v2) direct WebSocket protocol."""
         try:
             await self._api._get_auth_header()
             token = self._api.access_token
@@ -471,53 +471,60 @@ class HomelyWebSocketClient:
             ) from e
 
         location_id = str(self._location_id)
-        poll_url = f"{HomelyUrls.WEBSOCKET}{self._WS_POLL_PATH}"
         ws_base = HomelyUrls.WEBSOCKET.replace("https://", "wss://") + self._WS_POLL_PATH
+
+        # Direct WebSocket — server auto-connects to namespace (no polling handshake)
+        qs = urllib.parse.urlencode({
+            "EIO": "3",
+            "transport": "websocket",
+            "locationId": location_id,
+            "token": f"Bearer {token}",
+        })
+        ws_url = f"{ws_base}?{qs}"
 
         try:
             async with asyncio.timeout(15):
-                # Step 1: EIO=3 HTTP polling handshake to get session ID
-                async with self._api._client_session.get(
-                    poll_url, params={"EIO": "3", "transport": "polling"}
-                ) as resp:
-                    text = await resp.text()
+                self._ws = await self._api._client_session.ws_connect(
+                    ws_url,
+                    headers={
+                        "Origin": HomelyUrls.WEBSOCKET,
+                        "Authorization": f"Bearer {token}",
+                        "locationId": location_id,
+                    },
+                    autoping=False,
+                )
 
-            # Parse: "<length>:<type><json>"
-            payload = text.split(":", 1)[-1]
-            eio_data = json.loads(payload[1:])
-            sid = eio_data["sid"]
+            # EIO=3 open packet
+            eio_open = await asyncio.wait_for(self._ws.receive(), timeout=10)
+            if eio_open.type != WSMsgType.TEXT or not eio_open.data.startswith("0"):
+                raise HomelyWebSocketError(
+                    f"Expected EIO open packet, got: {eio_open.data!r}"
+                )
+            eio_data = json.loads(eio_open.data[1:])
             self._ping_interval = eio_data.get("pingInterval", 25000) / 1000
 
-            # Step 2: WebSocket upgrade
-            qs = urllib.parse.urlencode(
-                {"EIO": "3", "transport": "websocket", "sid": sid}
-            )
-            self._ws = await self._api._client_session.ws_connect(
-                f"{ws_base}?{qs}",
-                headers={"Origin": HomelyUrls.WEBSOCKET},
-                autoping=False,
-            )
-
-            # Step 3: EIO=3 upgrade probe
-            await self._ws.send_str("2probe")
-            probe = await asyncio.wait_for(self._ws.receive(), timeout=10)
-            if probe.data != "3probe":
+            # Server auto-connects us to the namespace — wait for '40'
+            # Do NOT send our own '40'; sending it causes immediate server disconnect
+            ns_auto = await asyncio.wait_for(self._ws.receive(), timeout=10)
+            if not (ns_auto.type == WSMsgType.TEXT and ns_auto.data == "40"):
                 raise HomelyWebSocketError(
-                    f"EIO=3 upgrade probe failed: {probe.data!r}"
+                    f"Expected server namespace auto-connect '40', got: {ns_auto.data!r}"
                 )
-            await self._ws.send_str("5")  # upgrade confirmed
 
-            # Step 4: Socket.IO namespace connect with auth
-            ns_auth = json.dumps(
+            # Authenticate within the namespace
+            auth_payload = json.dumps(
                 {"token": f"Bearer {token}", "locationId": location_id}
             )
-            await self._ws.send_str("0" + ns_auth)
-
-            # Step 5: Wait for namespace connect confirmation
-            ns_resp = await asyncio.wait_for(self._ws.receive(), timeout=10)
-            if not (ns_resp.type == WSMsgType.TEXT and ns_resp.data.startswith("40")):
+            await self._ws.send_str(f'42["authentication",{auth_payload}]')
+            auth_resp = await asyncio.wait_for(self._ws.receive(), timeout=10)
+            if auth_resp.type != WSMsgType.TEXT or not auth_resp.data.startswith("42"):
                 raise HomelyWebSocketError(
-                    f"Unexpected namespace connect response: {ns_resp.data!r}"
+                    f"Unexpected auth response: {auth_resp.data!r}"
+                )
+            auth_inner = json.loads(auth_resp.data[2:])
+            if not (auth_inner[0] == "authenticated" and auth_inner[1] is True):
+                raise HomelyWebSocketError(
+                    f"Authentication failed: {auth_resp.data!r}"
                 )
 
         except HomelyWebSocketError:
@@ -531,7 +538,7 @@ class HomelyWebSocketClient:
                 f"Unexpected error during WebSocket connect: {e}"
             ) from e
 
-        self._logger.info("WebSocket %s: connected (EIO=3)", self.name)
+        self._logger.info("WebSocket %s: authenticated and connected (EIO=3)", self.name)
         self._handle_event("connect")
 
     async def _try_reconnect(self, timeout: int = 5) -> bool:
@@ -548,25 +555,42 @@ class HomelyWebSocketClient:
         await self.connect()
         return True
 
-    def _parse_sio_event(self, raw: str) -> None:
-        """Parse a Socket.IO v2 event packet ('42[...]') and dispatch callbacks."""
-        try:
-            payload: list[Any] = json.loads(raw[2:])
-            event_name: str = payload[0]
-            event_data: Any = payload[1] if len(payload) > 1 else {}
-        except (json.JSONDecodeError, IndexError, KeyError):
-            self._logger.warning("WebSocket %s: malformed event: %r", self.name, raw)
-            return
+    def _parse_sio_packet(self, raw: str) -> tuple[str | None, WsEvent | None]:
+        """Parse a Socket.IO event packet, return (ack_id, event).
 
-        # Wrap in our WsEvent envelope format expected by WsEventAdapter
-        envelope = {"type": event_name, "data": event_data}
+        App API format: 42<id>["message", {"type": "...", "eventData": {...}}]
+        """
         try:
-            ws_event = WsEventAdapter.validate_python(envelope)
-            self._handle_event("event", ws_event)
+            # Extract optional numeric ack ID between "42" and "["
+            rest = raw[2:]
+            ack_id: str | None = None
+            if rest and rest[0].isdigit():
+                bracket = rest.index("[")
+                ack_id = rest[:bracket]
+                rest = rest[bracket:]
+            payload: list[Any] = json.loads(rest)
+            event_name: str = payload[0]
+            inner: Any = payload[1] if len(payload) > 1 else {}
+        except (json.JSONDecodeError, IndexError, ValueError):
+            self._logger.warning("WebSocket %s: malformed event: %r", self.name, raw)
+            return None, None
+
+        # App API wraps events in a "message" envelope
+        if event_name == "message" and isinstance(inner, dict):
+            event_type = inner.get("type", "")
+            event_data = inner.get("eventData", {})
+        else:
+            event_type = event_name
+            event_data = inner
+
+        envelope = {"type": event_type, "data": event_data}
+        try:
+            return ack_id, WsEventAdapter.validate_python(envelope)
         except PydanticValidationError:
             self._logger.debug(
-                "WebSocket %s: unrecognised event %r", self.name, event_name
+                "WebSocket %s: unrecognised event type %r", self.name, event_type
             )
+            return ack_id, None
 
     def register_event_callback(
         self,
@@ -622,10 +646,21 @@ class HomelyWebSocketClient:
                     break
                 if msg.type == WSMsgType.TEXT:
                     data = msg.data
-                    if data == "3":  # EIO=3 pong — ignore
-                        continue
-                    if data.startswith("42"):  # Socket.IO event
-                        self._parse_sio_event(data)
+                    if data == "2":  # EIO=3 server ping — must pong
+                        await self._ws.send_str("3")
+                    elif data == "3":  # EIO=3 pong (response to our ping)
+                        pass
+                    elif data == "41":  # Socket.IO namespace disconnect
+                        self._logger.warning(
+                            "WebSocket %s: server namespace disconnect", self.name
+                        )
+                        break
+                    elif data.startswith("42"):  # Socket.IO event
+                        ack_id, ws_event = self._parse_sio_packet(data)
+                        if ack_id:
+                            await self._ws.send_str(f"43{ack_id}[]")
+                        if ws_event:
+                            self._handle_event("event", ws_event)
                 elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
                     self._logger.warning(
                         "WebSocket %s: connection dropped (%s)", self.name, msg.type

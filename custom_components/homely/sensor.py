@@ -180,12 +180,16 @@ class HomelyAlarmStateSensor(
         AlarmState.ARMED_PARTLY: AlarmControlPanelState.ARMED_HOME,
         AlarmState.ARMED_AWAY: AlarmControlPanelState.ARMED_AWAY,
         AlarmState.ARMED_NIGHT: AlarmControlPanelState.ARMED_NIGHT,
+        AlarmState.BREACHED: AlarmControlPanelState.TRIGGERED,
+        # App API arming states
+        AlarmState.ARM_PENDING: AlarmControlPanelState.ARMING,
+        AlarmState.ARM_NIGHT_PENDING: AlarmControlPanelState.ARMING,
+        # SDK API legacy arming states
         AlarmState.ALARM_STAY_PENDING: AlarmControlPanelState.ARMING,
         AlarmState.ARMED_NIGHT_PENDING: AlarmControlPanelState.ARMING,
         AlarmState.ARMED_AWAY_PENDING: AlarmControlPanelState.ARMING,
-        AlarmState.BREACHED: AlarmControlPanelState.TRIGGERED,
         AlarmState.ALARM_PENDING: AlarmControlPanelState.PENDING,
-    }  # TODO: verify mapping
+    }
 
     def __init__(
         self,

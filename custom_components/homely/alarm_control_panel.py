@@ -28,6 +28,10 @@ _ALARM_STATE_MAP: dict[AlarmState, AlarmControlPanelState] = {
     AlarmState.ARMED_NIGHT: AlarmControlPanelState.ARMED_NIGHT,
     AlarmState.ARMED_PARTLY: AlarmControlPanelState.ARMED_HOME,
     AlarmState.BREACHED: AlarmControlPanelState.TRIGGERED,
+    # App API arming states
+    AlarmState.ARM_PENDING: AlarmControlPanelState.ARMING,
+    AlarmState.ARM_NIGHT_PENDING: AlarmControlPanelState.ARMING,
+    # SDK API legacy arming states
     AlarmState.ALARM_PENDING: AlarmControlPanelState.PENDING,
     AlarmState.ALARM_STAY_PENDING: AlarmControlPanelState.ARMING,
     AlarmState.ARMED_NIGHT_PENDING: AlarmControlPanelState.ARMING,
