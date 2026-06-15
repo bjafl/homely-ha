@@ -37,11 +37,11 @@ FAKE_LOCATIONS_RESPONSE = [
 ]
 
 FAKE_HOME = {
-    "locationId": TEST_LOCATION_ID,
-    "gatewayserial": "GW123456",
+    "location_id": TEST_LOCATION_ID,
+    "gateway_serial": "GW123456",
     "name": TEST_LOCATION_NAME,
-    "alarmState": "DISARMED",
-    "userRoleAtLocation": "OWNER",
+    "alarm_state": "DISARMED",
+    "user_role": "OWNER",
     "devices": [],
 }
 

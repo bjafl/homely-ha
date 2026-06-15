@@ -298,31 +298,32 @@ class Device(BaseModel):
     model_name: Annotated[
         str | None, Field(alias="modelName", description="Model name")
     ] = None
+    # App API fields
+    location_id: Annotated[
+        UUID | None, Field(alias="locationId", description="Sub-location UUID")
+    ] = None
+    root_location_id: Annotated[
+        UUID | None, Field(alias="rootLocationId", description="Root location UUID")
+    ] = None
+    gateway_id: Annotated[
+        UUID | None, Field(alias="gatewayId", description="Gateway UUID")
+    ] = None
     features: DeviceFeatures
 
 
-# Home API Response Model
+# Home API Response Model — normalised from the nested app-API response
 class HomeResponse(BaseModel):
     """Complete home state from Homely API."""
 
-    location_id: Annotated[
-        UUID, Field(alias="locationId", description="Unique ID for the location")
-    ]
-    gateway_serial: Annotated[str | None, Field(alias="gatewayserial")] = None
-    name: Annotated[str | None, Field(description="Name of the location")] = None
+    location_id: UUID
+    name: str | None = None
+    gateway_serial: str | None = None
     alarm_state: Annotated[
         AlarmState,
-        Field(alias="alarmState", description="Current alarm state"),
         BeforeValidator(lambda v: v.upper()),
     ]
-    user_role: Annotated[
-        UserRole,
-        Field(alias="userRoleAtLocation", description="User role at the location"),
-        BeforeValidator(lambda v: v.upper()),
-    ]
-    devices: Annotated[
-        list[Device], Field(description="List of devices in the location")
-    ]
+    user_role: UserRole | None = None
+    devices: list[Device]
 
 
 # Error Response Models

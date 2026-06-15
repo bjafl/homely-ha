@@ -259,20 +259,43 @@ class HomelyApi:
         return {str(loc.location_id): loc.name for loc in locations}
 
     async def get_home(self, location_id: str) -> HomeResponse:
-        """Get home status for a specific location."""
-        response = await self._make_request(
+        """Get home status for a specific location.
+
+        Combines /home/{id} (devices + gateway + location metadata) with
+        /alarm/state/{id} (alarm state), as the app API splits these across
+        two endpoints.
+        """
+        home_resp = await self._make_request(
             request_type="get",
             url=f"{HomelyUrls.HOME}/{location_id}",
             include_token=True,
         )
-        data = await response.json()
-        self._logger.debug("Json data from get_home response: %s", data)
-        if not response.ok:
-            raise HomelyRequestError("Failed to get home", data)
+        home_data = await home_resp.json()
+        self._logger.debug("Json data from get_home response: %s", home_data)
+        if not home_resp.ok:
+            raise HomelyRequestError("Failed to get home", home_data)
+
+        alarm_resp = await self._make_request(
+            request_type="get",
+            url=f"{HomelyUrls.ALARM_STATE}/{location_id}",
+            include_token=True,
+        )
+        alarm_data = await alarm_resp.json()
+        if not alarm_resp.ok:
+            raise HomelyRequestError("Failed to get alarm state", alarm_data)
+
+        cached_location = self._locations.get(location_id)
         try:
-            home = HomeResponse(**data)
-        except PydanticValidationError as e:
-            raise HomelyValidationError("Failed to parse home response", data) from e
+            home = HomeResponse(
+                location_id=home_data["location"]["id"],
+                name=home_data["location"].get("name"),
+                gateway_serial=home_data.get("gateway", {}).get("serialNumber"),
+                alarm_state=alarm_data["state"],
+                user_role=cached_location.role if cached_location else None,
+                devices=[Device.model_validate(d) for d in home_data.get("devices", [])],
+            )
+        except (PydanticValidationError, KeyError) as e:
+            raise HomelyValidationError("Failed to parse home response", home_data) from e
         return home
 
 

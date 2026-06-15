@@ -184,15 +184,25 @@ class TestHomelyApi:
         mock_get.assert_called_once_with(HomelyUrls.LOCATIONS, headers=headers)
 
     async def test_get_home(
-        self, api_logged_in_with_locations: HomelyApi, mock_home_response: MagicMock
+        self,
+        api_logged_in_with_locations: HomelyApi,
+        mock_home_response: MagicMock,
+        mock_alarm_state_response: MagicMock,
     ):
         """Test get_home method of HomelyApi."""
         api = api_logged_in_with_locations
-        api._client_session.get = AsyncMock(return_value=mock_home_response)
+        # get_home makes two GET calls: /home/{id} then /alarm/state/{id}
+        api._client_session.get = AsyncMock(
+            side_effect=[mock_home_response, mock_alarm_state_response]
+        )
         headers = await api._get_auth_header()
         home = await api.get_home(TEST_LOCATION_ID)
-        api._client_session.get.assert_called_once_with(
+        assert api._client_session.get.call_count == 2
+        api._client_session.get.assert_any_call(
             f"{HomelyUrls.HOME}/{TEST_LOCATION_ID}", headers=headers
+        )
+        api._client_session.get.assert_any_call(
+            f"{HomelyUrls.ALARM_STATE}/{TEST_LOCATION_ID}", headers=headers
         )
         assert home is not None
         assert str(home.location_id) == TEST_LOCATION_ID
@@ -203,6 +213,7 @@ class TestHomelyApi:
     ):
         """Test get_home method of HomelyApi with invalid request."""
         api = api_logged_in_with_locations
+        # 404 on the first call (/home/) raises immediately — alarm state never fetched
         api._client_session.get = AsyncMock(return_value=create_mock_response(404))
         with pytest.raises(HomelyRequestError):
             await api.get_home(TEST_LOCATION_ID)
@@ -213,6 +224,7 @@ class TestHomelyApi:
     ):
         """Test get_home method of HomelyApi with invalid response."""
         api = api_logged_in_with_locations
+        # Missing required nested structure raises HomelyValidationError (KeyError → caught)
         invalid_response = create_mock_response(200, {"invalid": "data"})
         api._client_session.get = AsyncMock(return_value=invalid_response)
         with pytest.raises(HomelyValidationError):

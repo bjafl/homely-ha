@@ -273,6 +273,20 @@ def mock_home_response(mock_home_response_data) -> MagicMock:
 
 
 @pytest.fixture
+def mock_alarm_state_response_data() -> dict:
+    """Fixture for mock alarm state response data."""
+    path = Path(__file__).parent / "fixtures" / "alarm_state_response.json"
+    with path.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+@pytest.fixture
+def mock_alarm_state_response(mock_alarm_state_response_data) -> MagicMock:
+    """Fixture for a mock alarm state response."""
+    return create_mock_response(status=200, json_data=mock_alarm_state_response_data)
+
+
+@pytest.fixture
 def mock_simple_home_response_object(mock_device) -> HomeResponse:
     """Fixture for a simple home response object."""
     home = HomeResponse(**FAKE_HOME)
