@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import HomelyDataUpdateCoordinator
+from .exceptions import HomelyError
 from .models import AlarmState
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,7 +65,12 @@ class HomelyAlarmControlPanel(
 
     _attr_has_entity_name = True
     _attr_name = None
-    _attr_supported_features = AlarmControlPanelEntityFeature(0)
+    _attr_code_arm_required = False
+    _attr_supported_features = (
+        AlarmControlPanelEntityFeature.ARM_AWAY
+        | AlarmControlPanelEntityFeature.ARM_HOME
+        | AlarmControlPanelEntityFeature.ARM_NIGHT
+    )
 
     def __init__(
         self,
@@ -102,17 +108,32 @@ class HomelyAlarmControlPanel(
         return ha_state
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
-        """Send disarm command — not yet implemented."""
-        _LOGGER.warning("Disarm not yet supported by Homely integration")
+        """Disarm the alarm. Requires the Homely PIN as code."""
+        if not code:
+            _LOGGER.error("Homely disarm requires a PIN code")
+            return
+        try:
+            await self.coordinator.api.disarm_alarm(self._location_id, code)
+        except HomelyError as err:
+            _LOGGER.error("Failed to disarm Homely alarm: %s", err)
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
-        """Send arm away command — not yet implemented."""
-        _LOGGER.warning("Arm away not yet supported by Homely integration")
+        """Arm alarm in away mode."""
+        try:
+            await self.coordinator.api.arm_alarm(self._location_id, "ARMED_AWAY")
+        except HomelyError as err:
+            _LOGGER.error("Failed to arm Homely alarm (away): %s", err)
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
-        """Send arm home command — not yet implemented."""
-        _LOGGER.warning("Arm home (partly) not yet supported by Homely integration")
+        """Arm alarm in home (partly) mode."""
+        try:
+            await self.coordinator.api.arm_alarm(self._location_id, "ARMED_PARTLY")
+        except HomelyError as err:
+            _LOGGER.error("Failed to arm Homely alarm (home): %s", err)
 
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
-        """Send arm night command — not yet implemented."""
-        _LOGGER.warning("Arm night not yet supported by Homely integration")
+        """Arm alarm in night mode."""
+        try:
+            await self.coordinator.api.arm_alarm(self._location_id, "ARMED_NIGHT")
+        except HomelyError as err:
+            _LOGGER.error("Failed to arm Homely alarm (night): %s", err)

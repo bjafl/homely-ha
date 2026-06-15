@@ -25,6 +25,8 @@ class HomelyUrls:
     LOCATIONS = f"{BASE}/locations"
     HOME = f"{BASE}/home"
     ALARM_STATE = f"{BASE}/alarm/state"
+    ALARM_ARM = f"{BASE}/alarm/arm"
+    ALARM_DISARM = f"{BASE}/alarm/disarm"
     WEBSOCKET = f"https://{ORIGIN}"
 
 

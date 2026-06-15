@@ -299,6 +299,41 @@ class HomelyApi:
         return home
 
 
+    async def arm_alarm(self, location_id: str, alarm_profile: str) -> None:
+        """Arm the alarm with the given profile (ARMED_AWAY / ARMED_NIGHT / ARMED_PARTLY)."""
+        response = await self._make_request(
+            request_type="post",
+            url=HomelyUrls.ALARM_ARM,
+            include_token=True,
+            json={"locationId": location_id, "alarmProfile": alarm_profile},
+        )
+        if not response.ok:
+            try:
+                data = await response.json()
+            except Exception:
+                data = {}
+            raise HomelyRequestError(
+                f"Failed to arm alarm ({response.status})", data
+            )
+
+    async def disarm_alarm(self, location_id: str, pin: str) -> None:
+        """Disarm the alarm with the user's PIN code."""
+        response = await self._make_request(
+            request_type="post",
+            url=HomelyUrls.ALARM_DISARM,
+            include_token=True,
+            json={"pin": pin, "locationId": location_id},
+        )
+        if not response.ok:
+            try:
+                data = await response.json()
+            except Exception:
+                data = {}
+            raise HomelyRequestError(
+                f"Failed to disarm alarm ({response.status})", data
+            )
+
+
 class HomelyHomeState(HomeResponse):
     """Represents the state of a Homely location.
 
