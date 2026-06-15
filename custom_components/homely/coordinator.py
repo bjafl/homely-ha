@@ -56,7 +56,9 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             session = async_create_clientsession(hass)
             self.api = HomelyApi(session)
         self._ws_clients: dict[str, HomelyWebSocketClient] = {}
+        self._ws_tasks: dict[str, asyncio.Task] = {}
         self._ws_active: dict[str, bool] = {}
+        self._shutting_down: bool = False
         self._last_error_refresh: float = 0
         self._rate_limited_until: float = 0
 
@@ -157,11 +159,11 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
 
             # Validate that selected locations still exist
             if self.api.locations:
-                all_location_ids = await self.api.get_location_id_names()
+                available_ids = {str(loc.location_id) for loc in self.api.locations}
                 valid_selected_ids = [
                     loc_id
                     for loc_id in self.selected_location_ids
-                    if loc_id in all_location_ids
+                    if loc_id in available_ids
                 ]
 
                 if len(valid_selected_ids) != len(self.selected_location_ids):
@@ -206,6 +208,7 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         if new_location_ids:
             self.selected_location_ids = new_location_ids
         await self.async_shutdown()
+        self._shutting_down = False
         await self.async_refresh()
 
         # Start websockets for new locations
@@ -230,7 +233,6 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             api=self.api,
             location_id=location_id,
             name=f"Homely WS {location_id}",
-            max_reconnection_attempts=5,
         )
 
         try:
@@ -251,8 +253,11 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             self._ws_clients[location_id] = ws
             self._ws_active[location_id] = True
 
-            # Start the background message loop
-            self.hass.async_create_task(ws.wait())
+            # Start the background message loop, replacing any stale task
+            old_task = self._ws_tasks.pop(location_id, None)
+            if old_task and not old_task.done():
+                old_task.cancel()
+            self._ws_tasks[location_id] = self.hass.async_create_task(ws.wait())
 
             _LOGGER.info("WebSocket connected for location %s", location_id)
 
@@ -264,6 +269,8 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
     @callback
     def _handle_ws_disconnect(self, location_id: str) -> None:
         """Handle websocket disconnection."""
+        if self._shutting_down:
+            return
         _LOGGER.warning("WebSocket disconnected for location %s", location_id)
 
         self._ws_clients.pop(location_id, None)
@@ -339,6 +346,10 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
 
     async def async_shutdown(self) -> None:
         """Clean up resources when coordinator shuts down."""
+        self._shutting_down = True
+        for task in self._ws_tasks.values():
+            task.cancel()
+        self._ws_tasks.clear()
         for location_id, ws_client in self._ws_clients.items():
             try:
                 await ws_client.disconnect()

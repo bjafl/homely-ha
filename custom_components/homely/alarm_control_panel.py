@@ -66,7 +66,7 @@ class HomelyAlarmControlPanel(
 
     _attr_has_entity_name = True
     _attr_name = None
-    _attr_code_arm_required = True  # PIN required; arm methods accept but ignore the code
+    _attr_code_arm_required = False  # Homely only requires PIN to disarm, not to arm
     _attr_code_format = CodeFormat.NUMBER
     _attr_supported_features = (
         AlarmControlPanelEntityFeature.ARM_AWAY

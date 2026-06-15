@@ -12,6 +12,7 @@ STEP_USER = "user"
 
 
 APP_API_CLIENT_ID = "account"
+# Extracted from the official Homely app — required for the OAuth2 password-grant flow
 APP_API_CLIENT_SECRET = "71fb00d6-ad04-43ca-96f4-fb797259da65"
 
 

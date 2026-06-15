@@ -294,11 +294,15 @@ class HomelyApi:
 
         cached_location = self._locations.get(location_id)
         try:
+            alarm_state = alarm_data["state"]
+        except KeyError as e:
+            raise HomelyValidationError("Failed to parse alarm state response", alarm_data) from e
+        try:
             home = HomeResponse(
                 location_id=home_data["location"]["id"],
                 name=home_data["location"].get("name"),
                 gateway_serial=home_data.get("gateway", {}).get("serialNumber"),
-                alarm_state=alarm_data["state"],
+                alarm_state=alarm_state,
                 user_role=cached_location.role if cached_location else None,
                 devices=[Device.model_validate(d) for d in home_data.get("devices", [])],
             )
@@ -358,7 +362,7 @@ class HomelyHomeState(HomeResponse):
         ignore_unhandled_event_types: bool = False,
     ) -> HomelyHomeState:
         """Create copy of HomelyHomeState and apply updates from a WebSocket event."""
-        new_state = previous_state.model_copy()
+        new_state = previous_state.model_copy(deep=True)
         new_state.update_state(
             event,
             ignore_missing_states=ignore_missing_states,
@@ -433,11 +437,10 @@ class HomelyHomeState(HomeResponse):
         ignore_outdated_values: bool = True,
     ) -> None:
         """Update device state based on device change event data."""
-        # Validate location ID — fall back to locationId if rootLocationId is absent
-        effective_loc_id = update_data.root_location_id or update_data.location_id
-        if str(effective_loc_id) != str(self.location_id):
+        # Only validate using rootLocationId; locationId may be a sub-location (room) UUID
+        if update_data.root_location_id is not None and str(update_data.root_location_id) != str(self.location_id):
             raise HomelyStateUpdateLocationMismatchError(
-                f"Location ID {effective_loc_id} in update does not match"
+                f"Root location ID {update_data.root_location_id} in update does not match"
                 + f" location ID {self.location_id} of this home state"
             )
         # Find target state to update
@@ -502,10 +505,8 @@ class HomelyWebSocketClient:
             defaultdict(list)
         )
         self._should_disconnect = False
-        self._current_reconnection_attempt = 0
         self._logger = logger or _LOGGER
         self._name: str | None = kwargs.get("name", None)
-        self._max_reconnection_attempts = kwargs.get("max_reconnection_attempts", 5)
         self._ws: ClientWebSocketResponse | None = None
         self._ping_interval: float = 25.0
 
@@ -611,20 +612,6 @@ class HomelyWebSocketClient:
         self._logger.info("WebSocket %s: authenticated and connected (EIO=3)", self.name)
         self._handle_event("connect")
 
-    async def _try_reconnect(self, timeout: int = 5) -> bool:
-        """Attempt to reconnect the WebSocket."""
-        if self._should_disconnect:
-            return False
-        self._current_reconnection_attempt += 1
-        if self._current_reconnection_attempt > self._max_reconnection_attempts:
-            self._should_disconnect = True
-            return False
-        self._logger.info("WebSocket %s: reconnecting (attempt %d)", self.name,
-                          self._current_reconnection_attempt)
-        await asyncio.sleep(timeout)
-        await self.connect()
-        return True
-
     def _parse_sio_packet(self, raw: str) -> tuple[str | None, WsEvent | None]:
         """Parse a Socket.IO event packet, return (ack_id, event).
 
@@ -706,7 +693,8 @@ class HomelyWebSocketClient:
     async def wait(self) -> None:
         """Listen for events until disconnected."""
         if not self.connected:
-            raise HomelyWebSocketError("WebSocket not connected")
+            self._handle_event("disconnect")
+            return
 
         ping_task = asyncio.create_task(self._heartbeat_loop())
         try:
