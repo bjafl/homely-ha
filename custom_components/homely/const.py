@@ -11,16 +11,20 @@ STEP_PICK_LOCATIONS = "pick_locations"
 STEP_USER = "user"
 
 
+APP_API_CLIENT_ID = "account"
+APP_API_CLIENT_SECRET = "71fb00d6-ad04-43ca-96f4-fb797259da65"
+
+
 class HomelyUrls:
     """Homely API URLs."""
 
-    ORIGIN = "sdk.iotiliti.cloud"
-    BASE = f"https://{ORIGIN}/homely"
-    AUTH_LOGIN = f"{BASE}/oauth/token"
-    AUTH_REFRESH = f"{BASE}/oauth/refresh"
+    ORIGIN = "api.homely.no"
+    BASE = f"https://{ORIGIN}"
+    AUTH_LOGIN = f"{BASE}/oauth/v2/token"
+    AUTH_REFRESH = f"{BASE}/oauth/v2/refresh-token"
     LOCATIONS = f"{BASE}/locations"
     HOME = f"{BASE}/home"
-    # ALARM_STATE = f"{BASE}/alarm/state"
+    ALARM_STATE = f"{BASE}/alarm/state"
     WEBSOCKET = f"https://{ORIGIN}"
 
 

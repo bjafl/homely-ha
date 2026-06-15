@@ -23,7 +23,7 @@ from socketio.exceptions import (
 
 # import requests
 # from requests import Response as HTTPResponse
-from .const import HomelyUrls
+from .const import APP_API_CLIENT_ID, APP_API_CLIENT_SECRET, HomelyUrls
 from .exceptions import (
     HomelyAuthError,
     HomelyAuthExpiredError,
@@ -206,7 +206,13 @@ class HomelyApi:
         response = await self._make_request(
             request_type="post",
             url=HomelyUrls.AUTH_LOGIN,
-            json={"username": username, "password": password},
+            json={
+                "client_id": APP_API_CLIENT_ID,
+                "client_secret": APP_API_CLIENT_SECRET,
+                "grant_type": "password",
+                "username": username,
+                "password": password,
+            },
         )
         data = await response.json()
         if not response.ok:
@@ -223,7 +229,12 @@ class HomelyApi:
         response = await self._make_request(
             request_type="post",
             url=HomelyUrls.AUTH_REFRESH,
-            json={"refresh_token": self._auth.refresh_token},
+            json={
+                "client_id": APP_API_CLIENT_ID,
+                "client_secret": APP_API_CLIENT_SECRET,
+                "grant_type": "refresh_token",
+                "refresh_token": self._auth.refresh_token,
+            },
         )
         data = await response.json()
         if not response.ok:
@@ -490,12 +501,14 @@ class HomelyWebSocketClient:
             ) from e
 
         location_id = str(self._location_id)
-        url = f"{HomelyUrls.WEBSOCKET}?locationId={location_id}&token=Bearer%20{token}"
-        headers = {**auth_header, "locationId": location_id}
 
         self._setup_sio_events()
         try:
-            await self._sio.connect(url, headers=headers)
+            await self._sio.connect(
+                HomelyUrls.WEBSOCKET,
+                socketio_path="/socket.io/",
+                auth={"token": f"Bearer {token}", "locationId": location_id},
+            )
             if not self._sio.connected:
                 self._logger.error(
                     f"WebSocket {self.name}: failed connection check after connect."

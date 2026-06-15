@@ -81,7 +81,10 @@ def create_entities_from_device(
     if device.features.temperature is not None:
         entities.append(HomelyTemperatureSensor(coordinator, location_id, device))
     if (diagnostic := device.features.diagnostic) is not None:
-        if diagnostic.states.network_link_strength is not None:
+        if (
+            diagnostic.states.network_link_strength is not None
+            or diagnostic.states.signal_strength is not None
+        ):
             entities.append(
                 HomelySignalStrengthSensor(
                     coordinator,
@@ -174,7 +177,7 @@ class HomelyAlarmStateSensor(
 
     _ALARM_STATE_MAP = {
         AlarmState.DISARMED: AlarmControlPanelState.DISARMED,
-        AlarmState.ARMED_STAY: AlarmControlPanelState.ARMED_HOME,
+        AlarmState.ARMED_PARTLY: AlarmControlPanelState.ARMED_HOME,
         AlarmState.ARMED_AWAY: AlarmControlPanelState.ARMED_AWAY,
         AlarmState.ARMED_NIGHT: AlarmControlPanelState.ARMED_NIGHT,
         AlarmState.ALARM_STAY_PENDING: AlarmControlPanelState.ARMING,
@@ -334,14 +337,12 @@ class HomelySignalStrengthSensor(HomelySensorBase[int], SensorEntity):
         device = self._get_current_device_state()
         if not device or not device.features.diagnostic:
             return None
-        if (
-            state := device.features.diagnostic.states.network_link_strength
-        ) is not None:
+        diag = device.features.diagnostic.states
+        # App API uses signalStrength; SDK API uses networklinkstrength
+        state = diag.signal_strength or diag.network_link_strength
+        if state is not None:
             self.last_updated = state.last_updated
-        if (
-            network_link_address
-            := device.features.diagnostic.states.network_link_address
-        ) is not None:
+        if (network_link_address := diag.network_link_address) is not None:
             self.network_link_address = network_link_address.value
         return state
 

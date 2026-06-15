@@ -27,7 +27,12 @@ from .homely_api import HomelyApi
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [
+    Platform.ALARM_CONTROL_PANEL,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+]
 
 # Module-level rate limit tracker — persists across setup retries within the same HA run.
 # This prevents rapid setup retries from repeatedly hitting the API and resetting the

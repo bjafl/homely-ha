@@ -18,7 +18,7 @@ class AlarmState(str, Enum):
     ARMED_AWAY = "ARMED_AWAY"
     ARMED_NIGHT = "ARMED_NIGHT"
     # ARMED_PARTLY = "ARMED_PARTLY"
-    ARMED_STAY = "ARMED_STAY"
+    ARMED_PARTLY = "ARMED_PARTLY"
     BREACHED = "BREACHED"
     ALARM_PENDING = "ALARM_PENDING"
     ALARM_STAY_PENDING = "ALARM_STAY_PENDING"
@@ -51,8 +51,8 @@ class TokenResponse(BaseModel):
     access_token: Annotated[str, Field(description="Access token for API requests")]
     expires_in: Annotated[int, Field(description="Token expiration time in seconds")]
     refresh_expires_in: Annotated[
-        int, Field(description="Refresh token expiration time in seconds")
-    ]
+        int | None, Field(description="Refresh token expiration time in seconds")
+    ] = None
     refresh_token: Annotated[
         str, Field(description="Refresh token for obtaining new access tokens")
     ]
@@ -79,8 +79,8 @@ class Location(BaseModel):
         BeforeValidator(lambda v: v.upper()),
     ]
     user_id: Annotated[
-        UUID, Field(alias="userId", description="Unique ID for the user")
-    ]
+        UUID | None, Field(alias="userId", description="Unique ID for the user")
+    ] = None
     location_id: Annotated[
         UUID, Field(alias="locationId", description="Unique ID for the location")
     ]
@@ -150,6 +150,11 @@ class DiagnosticStates(BaseModel):
     network_link_address: Annotated[
         SensorState[str] | None, Field(alias="networklinkaddress")
     ] = None
+    signal_strength: Annotated[
+        SensorState[int] | None, Field(alias="signalStrength")
+    ] = None
+    online: SensorState[bool] | None = None
+    tamper: SensorState[bool] | None = None
 
 
 class MeteringStates(BaseModel):
@@ -203,6 +208,7 @@ class FeatureName(str, Enum):
     DIAGNOSTIC = "diagnostic"
     METERING = "metering"
     THERMOSTAT = "thermostat"
+    SIREN = "siren"
 
 
 class AlarmFeature(BaseModel):
@@ -241,6 +247,20 @@ class ThermostatFeature(BaseModel):
     states: ThermostatStates
 
 
+class SirenStates(BaseModel):
+    """Collection of siren states."""
+
+    model_config = ConfigDict(extra="allow")
+
+    alarm: SensorState[bool] | None = None
+
+
+class SirenFeature(BaseModel):
+    """Siren feature container."""
+
+    states: SirenStates
+
+
 class DeviceFeatures(BaseModel):
     """Collection of all possible device features."""
 
@@ -250,6 +270,7 @@ class DeviceFeatures(BaseModel):
     diagnostic: DiagnosticFeature | None = None
     metering: MeteringFeature | None = None
     thermostat: ThermostatFeature | None = None
+    siren: SirenFeature | None = None
 
 
 # Device Models
@@ -417,6 +438,9 @@ class DiagnosticStateName(str, Enum):
 
     NETWORK_LINK_STRENGTH = "networklinkstrength"
     NETWORK_LINK_ADDRESS = "networklinkaddress"
+    SIGNAL_STRENGTH = "signalStrength"
+    ONLINE = "online"
+    TAMPER = "tamper"
 
 
 class MeteringStateName(str, Enum):
