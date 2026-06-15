@@ -3,23 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import urllib.parse
 from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal
 
 import aiohttp
-import socketio
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientResponse, ClientSession, ClientWebSocketResponse, WSMsgType
 from homeassistant.core import callback
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
-from socketio.exceptions import (
-    ConnectionError as SocketIOConnectionError,
-)
-from socketio.exceptions import (
-    DisconnectedError as SocketIODisconnectedError,
-)
 
 # import requests
 # from requests import Response as HTTPResponse
@@ -423,7 +418,9 @@ class HomelyHomeState(HomeResponse):
 
 
 class HomelyWebSocketClient:
-    """WebSocket client for Homely API real-time events."""
+    """EIO=3 / Socket.IO v2 WebSocket client for Homely app API."""
+
+    _WS_POLL_PATH = "/socket.io/"
 
     def __init__(
         self,
@@ -432,18 +429,7 @@ class HomelyWebSocketClient:
         logger: logging.Logger | None = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize WebSocket client for Homely location.
-
-        Args:
-            api: An authenticated HomelyApi instance.
-            location_id: The ID of the location to connect to.
-            logger: Optional logger instance.
-            kwargs: Additional options:
-                - name: Optional name for the WebSocket client.
-                - max_reconnection_attempts: Max reconnection attempts (default 5).
-                - socketio_logger: Optional logger for Socket.IO.
-                - engineio_logger: Optional logger for Engine.IO.
-        """
+        """Initialize WebSocket client for a Homely location."""
         self._api = api
         self._location_id = location_id
         self._websocket_event_callbacks: dict[str, list[WebSocketEventHandler]] = (
@@ -454,20 +440,8 @@ class HomelyWebSocketClient:
         self._logger = logger or _LOGGER
         self._name: str | None = kwargs.get("name", None)
         self._max_reconnection_attempts = kwargs.get("max_reconnection_attempts", 5)
-        socketio_logger = kwargs.get("socketio_logger", None)
-        if not isinstance(socketio_logger, logging.Logger):
-            socketio_logger = logging.getLogger(
-                f"{self._logger.name}.socketio_{self.name}"
-            )
-        engineio_logger = kwargs.get("engineio_logger", None)
-        if not isinstance(engineio_logger, logging.Logger):
-            engineio_logger = logging.getLogger(
-                f"{self._logger.name}.engineio_{self.name}"
-            )
-        self._sio = socketio.AsyncClient(
-            logger=socketio_logger,
-            engineio_logger=engineio_logger,
-        )
+        self._ws: ClientWebSocketResponse | None = None
+        self._ping_interval: float = 25.0
 
     @property
     def name(self) -> str:
@@ -482,62 +456,83 @@ class HomelyWebSocketClient:
     @property
     def connected(self) -> bool:
         """Check if the WebSocket client is connected."""
-        return bool(self._sio and self._sio.connected)
+        return self._ws is not None and not self._ws.closed
 
     async def connect(self) -> None:
-        """Connect to WebSocket for real-time events."""
+        """Connect using EIO=3 (Socket.IO v2) protocol."""
         try:
-            auth_header = await self._api._get_auth_header()
+            await self._api._get_auth_header()
             token = self._api.access_token
             if not token:
                 raise HomelyAuthError("HomelyApi failed to provide access token")
         except HomelyError as e:
-            self._logger.error(
-                f"WebSocket {self.name}: error getting auth from HomelyApi",
-                exc_info=True,
-            )
             raise HomelyWebSocketError(
                 "Failed to get authentication token for WebSocket"
             ) from e
 
         location_id = str(self._location_id)
+        poll_url = f"{HomelyUrls.WEBSOCKET}{self._WS_POLL_PATH}"
+        ws_base = HomelyUrls.WEBSOCKET.replace("https://", "wss://") + self._WS_POLL_PATH
 
-        self._setup_sio_events()
         try:
-            await self._sio.connect(
-                HomelyUrls.WEBSOCKET,
-                socketio_path="/socket.io/",
-                auth={"token": f"Bearer {token}", "locationId": location_id},
+            async with asyncio.timeout(15):
+                # Step 1: EIO=3 HTTP polling handshake to get session ID
+                async with self._api._client_session.get(
+                    poll_url, params={"EIO": "3", "transport": "polling"}
+                ) as resp:
+                    text = await resp.text()
+
+            # Parse: "<length>:<type><json>"
+            payload = text.split(":", 1)[-1]
+            eio_data = json.loads(payload[1:])
+            sid = eio_data["sid"]
+            self._ping_interval = eio_data.get("pingInterval", 25000) / 1000
+
+            # Step 2: WebSocket upgrade
+            qs = urllib.parse.urlencode(
+                {"EIO": "3", "transport": "websocket", "sid": sid}
             )
-            if not self._sio.connected:
-                self._logger.error(
-                    f"WebSocket {self.name}: failed connection check after connect."
+            self._ws = await self._api._client_session.ws_connect(
+                f"{ws_base}?{qs}",
+                headers={"Origin": HomelyUrls.WEBSOCKET},
+                autoping=False,
+            )
+
+            # Step 3: EIO=3 upgrade probe
+            await self._ws.send_str("2probe")
+            probe = await asyncio.wait_for(self._ws.receive(), timeout=10)
+            if probe.data != "3probe":
+                raise HomelyWebSocketError(
+                    f"EIO=3 upgrade probe failed: {probe.data!r}"
                 )
-                raise HomelyWebSocketError("Failed to connect to WebSocket")
-        except (SocketIOConnectionError, SocketIODisconnectedError) as e:
-            self._logger.error(
-                f"WebSocket {self.name}: connection error", exc_info=True
+            await self._ws.send_str("5")  # upgrade confirmed
+
+            # Step 4: Socket.IO namespace connect with auth
+            ns_auth = json.dumps(
+                {"token": f"Bearer {token}", "locationId": location_id}
             )
-            raise HomelyWebSocketError("Failed to connect to WebSocket") from e
-        except ValueError as e:
-            self._logger.error(
-                f"WebSocket {self.name}: invalid connection parameters", exc_info=True
-            )
-            raise HomelyWebSocketError("Invalid connection parameters") from e
-        except TimeoutError as e:
-            self._logger.error(
-                f"WebSocket {self.name}: connection timed out", exc_info=True
-            )
-            raise HomelyWebSocketError("WebSocket connection timed out") from e
+            await self._ws.send_str("0" + ns_auth)
+
+            # Step 5: Wait for namespace connect confirmation
+            ns_resp = await asyncio.wait_for(self._ws.receive(), timeout=10)
+            if not (ns_resp.type == WSMsgType.TEXT and ns_resp.data.startswith("40")):
+                raise HomelyWebSocketError(
+                    f"Unexpected namespace connect response: {ns_resp.data!r}"
+                )
+
         except HomelyWebSocketError:
             raise
+        except TimeoutError as e:
+            raise HomelyWebSocketError("WebSocket connection timed out") from e
+        except aiohttp.ClientError as e:
+            raise HomelyWebSocketError("WebSocket connection error") from e
         except Exception as e:
-            self._logger.error(
-                f"WebSocket {self.name}: unexpected error during connect", exc_info=True
-            )
             raise HomelyWebSocketError(
-                "Unexpected error during WebSocket connect"
+                f"Unexpected error during WebSocket connect: {e}"
             ) from e
+
+        self._logger.info("WebSocket %s: connected (EIO=3)", self.name)
+        self._handle_event("connect")
 
     async def _try_reconnect(self, timeout: int = 5) -> bool:
         """Attempt to reconnect the WebSocket."""
@@ -547,41 +542,31 @@ class HomelyWebSocketClient:
         if self._current_reconnection_attempt > self._max_reconnection_attempts:
             self._should_disconnect = True
             return False
-        self._logger.info(f"Trying to reconnect WebSocket {self.name}")
+        self._logger.info("WebSocket %s: reconnecting (attempt %d)", self.name,
+                          self._current_reconnection_attempt)
         await asyncio.sleep(timeout)
         await self.connect()
         return True
 
-    def _setup_sio_events(self) -> None:
-        """Set up Socket.IO event handlers."""
+    def _parse_sio_event(self, raw: str) -> None:
+        """Parse a Socket.IO v2 event packet ('42[...]') and dispatch callbacks."""
+        try:
+            payload: list[Any] = json.loads(raw[2:])
+            event_name: str = payload[0]
+            event_data: Any = payload[1] if len(payload) > 1 else {}
+        except (json.JSONDecodeError, IndexError, KeyError):
+            self._logger.warning("WebSocket %s: malformed event: %r", self.name, raw)
+            return
 
-        @callback
-        @self._sio.event  # type: ignore[misc]
-        def connect() -> None:
-            self._logger.info(f"WebSocket {self.name}: connected")
-            self._handle_event("connect")
-
-        @callback
-        @self._sio.event  # type: ignore[misc]
-        def disconnect() -> None:
-            self._logger.info(f"WebSocket {self.name}: disconnected")
-            self._handle_event("disconnect")
-
-        @callback
-        @self._sio.event  # type: ignore[misc]
-        def event(data: dict[str, Any]) -> None:
+        # Wrap in our WsEvent envelope format expected by WsEventAdapter
+        envelope = {"type": event_name, "data": event_data}
+        try:
+            ws_event = WsEventAdapter.validate_python(envelope)
+            self._handle_event("event", ws_event)
+        except PydanticValidationError:
             self._logger.debug(
-                "Homely event received on websocket %s: %s", self.name, data
+                "WebSocket %s: unrecognised event %r", self.name, event_name
             )
-            try:
-                ws_event = WsEventAdapter.validate_python(data)
-                self._handle_event("event", ws_event)
-            except PydanticValidationError:
-                self._logger.error(
-                    "Invalid WebSocket event data on websocket %s: %s",
-                    self.name,
-                    exc_info=True,
-                )
 
     def register_event_callback(
         self,
@@ -590,9 +575,6 @@ class HomelyWebSocketClient:
     ) -> None:
         """Register a callback for WebSocket events."""
         self._websocket_event_callbacks[event_type].append(callback)
-        self._logger.debug(
-            f"Registered callback for WebSocket {event_type} events at websocket {self.name}"
-        )
 
     def unregister_event_callback(
         self,
@@ -600,22 +582,10 @@ class HomelyWebSocketClient:
         event_type: Literal["event", "connect", "disconnect"] | None = None,
     ) -> None:
         """Unregister a specific callback for WebSocket events."""
-        selected_callbacks = [
-            cb
-            for ev_type, cbs in self._websocket_event_callbacks.items()
-            for cb in cbs
-            if not event_type or event_type == ev_type
-        ]
-        if callback in selected_callbacks:
-            if event_type is None:
-                for cbs in self._websocket_event_callbacks.values():
-                    if callback in cbs:
-                        cbs.remove(callback)
-            else:
-                self._websocket_event_callbacks[event_type].remove(callback)
-            self._logger.debug(
-                f"Unregistered callback {event_type or 'all'} events at websocket {self.name}"
-            )
+        for ev_type, cbs in self._websocket_event_callbacks.items():
+            if event_type is None or ev_type == event_type:
+                if callback in cbs:
+                    cbs.remove(callback)
 
     @callback
     def _handle_event(
@@ -623,44 +593,60 @@ class HomelyWebSocketClient:
         event_type: Literal["event", "connect", "disconnect"],
         event_data: WsEvent | None = None,
     ) -> None:
-        """Handle incoming WebSocket event and dispatch to registered callbacks."""
-        selected_callbacks = self._websocket_event_callbacks.get(event_type, [])
-        self._logger.debug(
-            f"Dispatching {len(selected_callbacks)} callbacks for {event_type} event at websocket {self.name}"
-        )
-        for event_callback in selected_callbacks:
+        """Dispatch a WebSocket event to all registered callbacks."""
+        for event_callback in self._websocket_event_callbacks.get(event_type, []):
             try:
-                if event_data and event_type == "event":
-                    event_callback(event_data)
-                else:
-                    event_callback(None)
+                event_callback(event_data if event_type == "event" else None)
             except Exception:
                 self._logger.error(
-                    f"Error in event callback for {event_type} at websocket {self.name}",
-                    exc_info=True,
+                    "Error in %s callback on websocket %s",
+                    event_type, self.name, exc_info=True,
                 )
 
     async def disconnect(self) -> None:
         """Disconnect the WebSocket."""
         self._should_disconnect = True
-        await self._sio.disconnect()
+        if self._ws and not self._ws.closed:
+            await self._ws.close()
 
     async def wait(self) -> None:
-        """Lock until WebSocket is disconnected."""
+        """Listen for events until disconnected."""
         if not self.connected:
-            raise HomelyWebSocketError("Websocket not connected")
-        while not self._should_disconnect:
-            try:
-                await self._sio.wait()
-            except (SocketIODisconnectedError, SocketIOConnectionError):
-                self._logger.error(
-                    "WebSocket disconnected while waiting for response", exc_info=True
-                )
+            raise HomelyWebSocketError("WebSocket not connected")
+
+        ping_task = asyncio.create_task(self._heartbeat_loop())
+        try:
+            assert self._ws is not None
+            async for msg in self._ws:
+                if self._should_disconnect:
+                    break
+                if msg.type == WSMsgType.TEXT:
+                    data = msg.data
+                    if data == "3":  # EIO=3 pong — ignore
+                        continue
+                    if data.startswith("42"):  # Socket.IO event
+                        self._parse_sio_event(data)
+                elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
+                    self._logger.warning(
+                        "WebSocket %s: connection dropped (%s)", self.name, msg.type
+                    )
+                    break
+        except Exception:
+            self._logger.error(
+                "WebSocket %s: error in listen loop", self.name, exc_info=True
+            )
+        finally:
+            ping_task.cancel()
+            self._handle_event("disconnect")
+            if not self._should_disconnect:
                 await self._try_reconnect()
 
-    def __del__(self) -> None:
-        """Best-effort cleanup warning."""
-        if self._sio and self._sio.connected:
-            self._logger.warning(
-                "WebSocket not properly closed. Use 'async with' or call disconnect() explicitly."
-            )
+    async def _heartbeat_loop(self) -> None:
+        """Send EIO=3 pings to keep the connection alive."""
+        while self.connected and not self._should_disconnect:
+            await asyncio.sleep(self._ping_interval)
+            if self.connected:
+                try:
+                    await self._ws.send_str("2")  # type: ignore[union-attr]
+                except Exception:
+                    break

@@ -9,8 +9,7 @@
   "issue_tracker": "https://github.com/bjafl/homely-ha/issues",
   "requirements": [
     "homeassistant>=2025.1.0",
-    "pydantic>=2.10.0",
-    "python-socketio>=5.10.0"
+    "pydantic>=2.10.0"
   ],
   "version": "2.0.0"
 }
