@@ -1,7 +1,7 @@
 # Homely Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.1.0+-green.svg)
 
 Native Home Assistant integration for Homely alarm systems with real-time WebSocket updates and multi-location support.
@@ -137,7 +137,7 @@ Configuration stored in `.ha_docker_test/config/`.
 
 ## Project Status
 
-**Version**: 0.1.0 (Beta)
+**Version**: 1.0.1
 **Quality Tier**: Bronze-Ready (95% complete)
 **Type Coverage**: 87% (116/133 functions)
 **Test Coverage**: 85%
