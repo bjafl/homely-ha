@@ -319,9 +319,9 @@ class HomeResponse(BaseModel):
     name: str | None = None
     gateway_serial: str | None = None
     alarm_state: Annotated[
-        AlarmState,
-        BeforeValidator(lambda v: v.upper()),
-    ]
+        AlarmState | None,
+        BeforeValidator(lambda v: v.upper() if isinstance(v, str) else v),
+    ] = None
     user_role: UserRole | None = None
     devices: list[Device]
 

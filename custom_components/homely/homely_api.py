@@ -279,24 +279,26 @@ class HomelyApi:
         home_data = await home_resp.json()
         self._logger.debug("Json data from get_home response: %s", home_data)
 
-        alarm_resp = await self._make_request(
-            request_type="get",
-            url=f"{HomelyUrls.ALARM_STATE}/{location_id}",
-            include_token=True,
-        )
-        if not alarm_resp.ok:
-            try:
-                err_data = await alarm_resp.json()
-            except Exception:
-                err_data = {}
-            raise HomelyRequestError("Failed to get alarm state", err_data)
-        alarm_data = await alarm_resp.json()
+        alarm_state: AlarmState | None = None
+        try:
+            alarm_resp = await self._make_request(
+                request_type="get",
+                url=f"{HomelyUrls.ALARM_STATE}/{location_id}",
+                include_token=True,
+            )
+            if alarm_resp.ok:
+                alarm_data = await alarm_resp.json()
+                alarm_state = alarm_data.get("state")
+            else:
+                self._logger.warning(
+                    "Alarm state unavailable for %s (HTTP %s)", location_id, alarm_resp.status
+                )
+        except HomelyRateLimitError:
+            raise
+        except HomelyError as err:
+            self._logger.warning("Could not fetch alarm state for %s: %s", location_id, err)
 
         cached_location = self._locations.get(location_id)
-        try:
-            alarm_state = alarm_data["state"]
-        except KeyError as e:
-            raise HomelyValidationError("Failed to parse alarm state response", alarm_data) from e
         try:
             home = HomeResponse(
                 location_id=home_data["location"]["id"],
@@ -549,6 +551,7 @@ class HomelyWebSocketClient:
         })
         ws_url = f"{ws_base}?{qs}"
 
+        _connected = False
         try:
             async with asyncio.timeout(15):
                 self._ws = await self._api._client_session.ws_connect(
@@ -593,10 +596,11 @@ class HomelyWebSocketClient:
                 bracket = rest.index("[")
                 rest = rest[bracket:]
             auth_inner = json.loads(rest)
-            if not (auth_inner[0] == "authenticated" and auth_inner[1] is True):
+            if not (auth_inner[0] == "authenticated" and auth_inner[1] == True):  # noqa: E712
                 raise HomelyWebSocketError(
                     f"Authentication failed: {auth_resp.data!r}"
                 )
+            _connected = True
 
         except HomelyWebSocketError:
             raise
@@ -608,6 +612,10 @@ class HomelyWebSocketClient:
             raise HomelyWebSocketError(
                 f"Unexpected error during WebSocket connect: {e}"
             ) from e
+        finally:
+            if not _connected and self._ws and not self._ws.closed:
+                await self._ws.close()
+                self._ws = None
 
         self._logger.info("WebSocket %s: authenticated and connected (EIO=3)", self.name)
         self._handle_event("connect")
@@ -730,7 +738,8 @@ class HomelyWebSocketClient:
             )
         finally:
             ping_task.cancel()
-            self._handle_event("disconnect")
+            if not self._should_disconnect:
+                self._handle_event("disconnect")
 
     async def _heartbeat_loop(self) -> None:
         """Send EIO=3 pings to keep the connection alive."""

@@ -57,6 +57,7 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             self.api = HomelyApi(session)
         self._ws_clients: dict[str, HomelyWebSocketClient] = {}
         self._ws_tasks: dict[str, asyncio.Task] = {}
+        self._reconnect_tasks: dict[str, asyncio.Task] = {}
         self._ws_active: dict[str, bool] = {}
         self._shutting_down: bool = False
         self._last_error_refresh: float = 0
@@ -222,6 +223,9 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         self, location_id: str, reconnect_if_exists: bool = True
     ) -> None:
         """Start websocket connection."""
+        if self._shutting_down:
+            _LOGGER.debug("Skipping WebSocket start for %s — coordinator shutting down", location_id)
+            return
         await self.ensure_api_initialized()
         old_ws = self._ws_clients.get(location_id)
         if old_ws and old_ws.connected and not reconnect_if_exists:
@@ -276,8 +280,13 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         self._ws_clients.pop(location_id, None)
         self._ws_active[location_id] = False
 
-        # Schedule reconnection
-        self.hass.async_create_task(self._schedule_reconnect(location_id))
+        # Schedule reconnection (replacing old reconnect if any)
+        old = self._reconnect_tasks.pop(location_id, None)
+        if old and not old.done():
+            old.cancel()
+        self._reconnect_tasks[location_id] = self.hass.async_create_task(
+            self._schedule_reconnect(location_id)
+        )
 
     @callback
     def _handle_ws_update(self, location_id: str, ws_event: WsEvent | None) -> None:
@@ -328,18 +337,22 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             attempt,
         )
         await asyncio.sleep(delay)
+        if self._shutting_down:
+            return
 
         try:
             await self.start_websocket(location_id, reconnect_if_exists=False)
+            self._reconnect_tasks.pop(location_id, None)
             _LOGGER.info("WebSocket reconnection successful for %s", location_id)
         except HomelyWebSocketError as err:
             _LOGGER.error("WebSocket reconnection failed for %s: %s", location_id, err)
             # Schedule next retry with increased attempt count (max 6 attempts)
             if attempt < 6:
-                self.hass.async_create_task(
+                self._reconnect_tasks[location_id] = self.hass.async_create_task(
                     self._schedule_reconnect(location_id, attempt + 1)
                 )
             else:
+                self._reconnect_tasks.pop(location_id, None)
                 _LOGGER.error(
                     "Max WebSocket reconnection attempts reached for %s", location_id
                 )
@@ -347,9 +360,7 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
     async def async_shutdown(self) -> None:
         """Clean up resources when coordinator shuts down."""
         self._shutting_down = True
-        for task in self._ws_tasks.values():
-            task.cancel()
-        self._ws_tasks.clear()
+        # Disconnect clients first so wait() finally sees _should_disconnect=True
         for location_id, ws_client in self._ws_clients.items():
             try:
                 await ws_client.disconnect()
@@ -357,5 +368,9 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
                 _LOGGER.warning(
                     "Error disconnecting WebSocket for %s: %s", location_id, err
                 )
+        for task in list(self._ws_tasks.values()) + list(self._reconnect_tasks.values()):
+            task.cancel()
+        self._ws_tasks.clear()
+        self._reconnect_tasks.clear()
         self._ws_clients.clear()
         self._ws_active.clear()
