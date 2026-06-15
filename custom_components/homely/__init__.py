@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -20,6 +21,7 @@ from .exceptions import (
     HomelyAuthExpiredError,
     HomelyAuthInvalidError,
     HomelyNetworkError,
+    HomelyRateLimitError,
 )
 from .homely_api import HomelyApi
 
@@ -27,10 +29,24 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
+# Module-level rate limit tracker — persists across setup retries within the same HA run.
+# This prevents rapid setup retries from repeatedly hitting the API and resetting the
+# rate-limit sliding window, which would otherwise create a deadlock.
+_rate_limited_until: float = 0
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Homely from a config entry."""
+    global _rate_limited_until
     _LOGGER.debug("Setting up Homely integration for entry %s", entry.entry_id)
+
+    now = asyncio.get_event_loop().time()
+    if now < _rate_limited_until:
+        remaining = _rate_limited_until - now
+        _LOGGER.warning(
+            "Skipping setup attempt — Homely API rate limited for %.0fs more", remaining
+        )
+        raise ConfigEntryNotReady(f"Homely API rate limited, retry in {remaining:.0f}s")
 
     session = async_get_clientsession(hass)
     api = HomelyApi(session, logger=_LOGGER)
@@ -41,6 +57,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except (HomelyAuthError, HomelyAuthExpiredError, HomelyAuthInvalidError) as err:
         _LOGGER.error("Authentication failed: %s", err)
         raise ConfigEntryAuthFailed from err
+    except HomelyRateLimitError as err:
+        _rate_limited_until = asyncio.get_event_loop().time() + max(120, err.retry_after * 10)
+        _LOGGER.warning("Rate limited during login: %s", err)
+        raise ConfigEntryNotReady(f"Homely API rate limited, retry after {err.retry_after}s") from err
     except HomelyNetworkError as err:
         _LOGGER.error("Network error during setup: %s", err)
         raise ConfigEntryNotReady from err
@@ -52,8 +72,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("No locations found for this account")
             raise ConfigEntryNotReady("No locations available")
 
-        # Update config entry with latest available locations
-        location_id_names = await api.get_location_id_names()
+        # Reuse the already-fetched locations to avoid extra API calls
+        location_id_names = {str(loc.location_id): loc.name for loc in locations}
         hass.config_entries.async_update_entry(
             entry,
             data={
@@ -62,6 +82,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             },
         )
 
+    except HomelyRateLimitError as err:
+        _rate_limited_until = asyncio.get_event_loop().time() + max(120, err.retry_after * 10)
+        _LOGGER.warning("Rate limited during location fetch: %s", err)
+        raise ConfigEntryNotReady(f"Homely API rate limited, retry after {err.retry_after}s") from err
     except HomelyNetworkError as err:
         _LOGGER.error("Failed to fetch locations: %s", err)
         raise ConfigEntryNotReady from err
@@ -71,13 +95,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create coordinator
     coordinator = HomelyDataUpdateCoordinator(hass, entry, api, selected_locations)
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady:
+        if coordinator.rate_limited_until > asyncio.get_event_loop().time():
+            _rate_limited_until = coordinator.rate_limited_until
+            _LOGGER.warning(
+                "Rate limited during first refresh, blocking setup retries for %.0fs",
+                _rate_limited_until - asyncio.get_event_loop().time(),
+            )
+        raise
 
-    # Validate selected locations exist
-    available_locations = await api.get_location_id_names()
-    _LOGGER.debug("Available locations: %s", available_locations)
+    # Reuse cached locations to avoid an extra API call
     valid_selected = [
-        loc_id for loc_id in selected_locations if str(loc_id) in available_locations
+        loc_id for loc_id in selected_locations if str(loc_id) in location_id_names
     ]
 
     if not valid_selected:

@@ -13,7 +13,7 @@ from homeassistant.helpers.aiohttp_client import (
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, FALLBACK_SCAN_INTERVAL
-from .exceptions import HomelyError, HomelyWebSocketError
+from .exceptions import HomelyError, HomelyRateLimitError, HomelyWebSocketError
 from .homely_api import (
     HomelyApi,
     HomelyHomeState,
@@ -58,11 +58,17 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         self._ws_clients: dict[str, HomelyWebSocketClient] = {}
         self._ws_active: dict[str, bool] = {}
         self._last_error_refresh: float = 0
+        self._rate_limited_until: float = 0
 
     @property
     def available_locations(self) -> list[Location] | None:
         """Return list of available locations."""
         return self.api.locations
+
+    @property
+    def rate_limited_until(self) -> float:
+        """Return the event loop time until which we are rate limited (0 if not)."""
+        return self._rate_limited_until
 
     @property
     def update_interval(self) -> timedelta:
@@ -137,6 +143,14 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         when new devices are added or removed, and can be used as a fallback if websockets
         are not working. For now, we call it occasionally to ensure state is valid.
         """
+        now = asyncio.get_event_loop().time()
+        if now < self._rate_limited_until:
+            remaining = self._rate_limited_until - now
+            if self.data:
+                _LOGGER.debug("Rate limited, returning cached data (%.0fs remaining)", remaining)
+                return self.data
+            raise UpdateFailed(f"Rate limited by Homely API, retry in {remaining:.0f}s")
+
         new_data: dict[str, HomelyHomeState] = {}
         try:
             await self.ensure_api_initialized()
@@ -163,6 +177,14 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
                 _LOGGER.debug("Fetching state for location %s", loc_id)
                 response = await self.api.get_home(loc_id)
                 new_data[loc_id] = HomelyHomeState.from_response(response)
+        except HomelyRateLimitError as err:
+            # Wait 5× the reported retry_after — Homely's actual rate limit window
+            # appears to be longer than the reported value.
+            self._rate_limited_until = asyncio.get_event_loop().time() + max(120, err.retry_after * 10)
+            _LOGGER.warning("Rate limited by Homely API: %s", err)
+            if self.data:
+                return self.data
+            raise UpdateFailed(str(err)) from err
         except HomelyError as err:
             _LOGGER.error("API error: %s", err)
             raise UpdateFailed(err) from err
