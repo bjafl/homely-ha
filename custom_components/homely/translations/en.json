@@ -66,6 +66,15 @@
       },
       "energy_check": {
         "name": "Energy Check"
+      },
+      "gateway_ac_power": {
+        "name": "Mains Power"
+      },
+      "gateway_battery_low": {
+        "name": "Backup Battery Low"
+      },
+      "gateway_online": {
+        "name": "Connected"
       }
     },
     "sensor": {
@@ -89,6 +98,18 @@
       },
       "thermostat": {
         "name": "Thermostat"
+      },
+      "gateway_battery": {
+        "name": "Backup Battery"
+      },
+      "gateway_battery_voltage": {
+        "name": "Backup Battery Voltage"
+      },
+      "gateway_power_source_voltage": {
+        "name": "Power Source Voltage"
+      },
+      "gateway_connection": {
+        "name": "Connection"
       }
     }
   }

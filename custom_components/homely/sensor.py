@@ -14,7 +14,12 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfTemperature
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -24,11 +29,12 @@ from custom_components.homely.homely_api import HomelyHomeState
 
 from .alarm_control_panel import _ALARM_STATE_MAP as _PANEL_ALARM_STATE_MAP
 from .coordinator import HomelyDataUpdateCoordinator
-from .base_sensor import HomelySensorBase, HomelySensorBaseAny
+from .base_sensor import HomelyGatewayEntity, HomelySensorBase, HomelySensorBaseAny
 from .const import DOMAIN, HomelyEntityIcons
 from .models import (
     AlarmState,
     Device,
+    Gateway,
     MeteringStateName,
     SensorState,
 )
@@ -69,7 +75,47 @@ async def async_setup_entry(
             dev_entities = create_entities_from_device(coordinator, location_id, device)
             entities.extend(dev_entities)
 
+        entities.extend(
+            cast(
+                list[HomelySensorBaseAny],
+                create_gateway_sensors(
+                    coordinator, location_id, getattr(home_state, "gateway", None)
+                ),
+            )
+        )
+
     async_add_entities(entities)
+
+
+def create_gateway_sensors(
+    coordinator: HomelyDataUpdateCoordinator,
+    location_id: str,
+    gateway: Gateway | None,
+) -> list["HomelyGatewaySensorBase"]:
+    """Create numeric/enum sensors for the gateway (hjemmesentral) device."""
+    if gateway is None:
+        return []
+    entities: list[HomelyGatewaySensorBase] = []
+    power = gateway.features.power if gateway.features else None
+    if power is not None:
+        if power.states.battery_percent is not None:
+            entities.append(
+                HomelyGatewayBatterySensor(coordinator, location_id, gateway)
+            )
+        if power.states.battery_voltage is not None:
+            entities.append(
+                HomelyGatewayBatteryVoltageSensor(coordinator, location_id, gateway)
+            )
+        if power.states.power_source_voltage is not None:
+            entities.append(
+                HomelyGatewayPowerSourceVoltageSensor(
+                    coordinator, location_id, gateway
+                )
+            )
+    connection = gateway.features.connection if gateway.features else None
+    if connection is not None and connection.states.source is not None:
+        entities.append(HomelyGatewayConnectionSensor(coordinator, location_id, gateway))
+    return entities
 
 
 def create_entities_from_device(
@@ -492,3 +538,118 @@ class HomelyThermostatSensor(HomelySensorBase[float], SensorEntity):
             if key not in ["local_temperature", "temperature"] and value is not None:
                 attrs[key] = value.value
         return attrs
+
+
+class HomelyGatewaySensorBase(HomelyGatewayEntity, SensorEntity):
+    """Base for numeric/enum sensors on the Homely gateway device."""
+
+
+class HomelyGatewayBatterySensor(HomelyGatewaySensorBase):
+    """Gateway backup battery level."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize the gateway battery sensor."""
+        super().__init__(coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_battery"
+        self._attr_translation_key = "gateway_battery"
+        self._attr_device_class = SensorDeviceClass.BATTERY
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the battery percentage."""
+        gw = self._gateway()
+        if not gw or not gw.features or not gw.features.power:
+            return None
+        state = gw.features.power.states.battery_percent
+        return state.value if state else None
+
+
+class HomelyGatewayBatteryVoltageSensor(HomelyGatewaySensorBase):
+    """Gateway backup battery voltage."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize the gateway battery voltage sensor."""
+        super().__init__(coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_battery_voltage"
+        self._attr_translation_key = "gateway_battery_voltage"
+        self._attr_device_class = SensorDeviceClass.VOLTAGE
+        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the battery voltage."""
+        gw = self._gateway()
+        if not gw or not gw.features or not gw.features.power:
+            return None
+        state = gw.features.power.states.battery_voltage
+        return state.value if state else None
+
+
+class HomelyGatewayPowerSourceVoltageSensor(HomelyGatewaySensorBase):
+    """Gateway mains power source voltage."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize the gateway power source voltage sensor."""
+        super().__init__(coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_power_source_voltage"
+        self._attr_translation_key = "gateway_power_source_voltage"
+        self._attr_device_class = SensorDeviceClass.VOLTAGE
+        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the power source voltage."""
+        gw = self._gateway()
+        if not gw or not gw.features or not gw.features.power:
+            return None
+        state = gw.features.power.states.power_source_voltage
+        return state.value if state else None
+
+
+class HomelyGatewayConnectionSensor(HomelyGatewaySensorBase):
+    """Gateway uplink connection source."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize the gateway connection source sensor."""
+        super().__init__(coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_connection"
+        self._attr_translation_key = "gateway_connection"
+        self._attr_device_class = SensorDeviceClass.ENUM
+        self._attr_options = ["ethernet", "wifi", "gsm"]
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the connection source."""
+        gw = self._gateway()
+        if not gw or not gw.features or not gw.features.connection:
+            return None
+        state = gw.features.connection.states.source
+        return state.value if state else None

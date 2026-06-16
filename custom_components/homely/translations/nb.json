@@ -66,6 +66,15 @@
       },
       "energy_check": {
         "name": "Energisjekk"
+      },
+      "gateway_ac_power": {
+        "name": "Nettstrøm"
+      },
+      "gateway_battery_low": {
+        "name": "Lavt reservebatteri"
+      },
+      "gateway_online": {
+        "name": "Tilkoblet"
       }
     },
     "sensor": {
@@ -89,6 +98,18 @@
       },
       "thermostat": {
         "name": "Termostat"
+      },
+      "gateway_battery": {
+        "name": "Reservebatteri"
+      },
+      "gateway_battery_voltage": {
+        "name": "Reservebatteri-spenning"
+      },
+      "gateway_power_source_voltage": {
+        "name": "Forsyningsspenning"
+      },
+      "gateway_connection": {
+        "name": "Tilkobling"
       }
     }
   }

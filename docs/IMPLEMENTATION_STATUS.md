@@ -24,10 +24,11 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 | AC-strøm | `power.acPower` | binary_sensor POWER | ✅ |
 | Lavt batteri | `power.batteryLow` | binary_sensor BATTERY (diag) | ✅ |
 | Tilkoblet | `gateway.online` | binary_sensor CONNECTIVITY (diag) | ✅ |
-| Batterinivå | `power.batteryPercent` | sensor BATTERY % (diag) | ⬜ |
-| Batterispenning | `power.batteryVoltage` | sensor VOLTAGE (diag) | ⬜ |
-| Forsyningsspenning | `power.powerSourceVoltage` | sensor VOLTAGE (diag) | ⬜ |
-| Tilkoblingskilde | `connection.source` | sensor ENUM (diag) | ⬜ |
+| Batterinivå | `power.batteryPercent` | sensor BATTERY % (diag) | ✅ |
+| Batterispenning | `power.batteryVoltage` | sensor VOLTAGE (diag) | ✅ |
+| Forsyningsspenning | `power.powerSourceVoltage` | sensor VOLTAGE (diag) | ✅ |
+| Tilkoblingskilde | `connection.source` | sensor ENUM (diag) | ✅ |
+| Delt mixin `HomelyGatewayEntity` (base_sensor) | — | refaktor | ✅ |
 | Firmware (egen update-entitet) | `status.firmware*` | update-entitet | ⬜ (sw_version satt) |
 | GSM-signal/operatør | `/gateways/{id}/networks` | sensor ENUM (diag) — nytt kall | ⬜ |
 
@@ -58,7 +59,7 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 ## Oppfølging / polish
 | Tiltak | Status |
 |---|---|
-| Oversettelsesnøkler for nye gateway-entiteter (`gateway_ac_power`/`gateway_battery_low`/`gateway_online`) i `strings.json` + `translations/` | ⬜ (entiteter virker, mangler lokaliserte navn) |
+| Oversettelsesnøkler for gateway-entiteter (en + nb) | ✅ (alle 7 gateway-entiteter) |
 
 ## Opprydding i eksisterende (Tabell 6) — ⬜
 | Tiltak | Status |

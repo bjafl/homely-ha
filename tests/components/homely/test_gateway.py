@@ -140,3 +140,51 @@ class TestGatewayBinarySensors:
         info = ent.device_info
         assert (DOMAIN, LOCATION_ID) in info["identifiers"]
         assert info["sw_version"] == "4.12.10"
+
+
+class TestGatewaySensors:
+    def test_battery_percent(self):
+        from homeassistant.components.sensor import SensorDeviceClass
+
+        from custom_components.homely.sensor import HomelyGatewayBatterySensor
+
+        gw = Gateway.model_validate(GATEWAY_DATA)
+        ent = HomelyGatewayBatterySensor(_coordinator_with_gateway(gw), LOCATION_ID, gw)
+        assert ent.native_value == 100
+        assert ent.device_class == SensorDeviceClass.BATTERY
+        assert ent.native_unit_of_measurement == "%"
+
+    def test_battery_voltage(self):
+        from homeassistant.components.sensor import SensorDeviceClass
+
+        from custom_components.homely.sensor import HomelyGatewayBatteryVoltageSensor
+
+        gw = Gateway.model_validate(GATEWAY_DATA)
+        ent = HomelyGatewayBatteryVoltageSensor(
+            _coordinator_with_gateway(gw), LOCATION_ID, gw
+        )
+        assert ent.native_value == 4.1
+        assert ent.device_class == SensorDeviceClass.VOLTAGE
+
+    def test_power_source_voltage(self):
+        from custom_components.homely.sensor import (
+            HomelyGatewayPowerSourceVoltageSensor,
+        )
+
+        gw = Gateway.model_validate(GATEWAY_DATA)
+        ent = HomelyGatewayPowerSourceVoltageSensor(
+            _coordinator_with_gateway(gw), LOCATION_ID, gw
+        )
+        assert ent.native_value == 9.1
+
+    def test_connection_source(self):
+        from homeassistant.components.sensor import SensorDeviceClass
+
+        from custom_components.homely.sensor import HomelyGatewayConnectionSensor
+
+        gw = Gateway.model_validate(GATEWAY_DATA)
+        ent = HomelyGatewayConnectionSensor(
+            _coordinator_with_gateway(gw), LOCATION_ID, gw
+        )
+        assert ent.native_value == "ethernet"
+        assert ent.device_class == SensorDeviceClass.ENUM

@@ -12,12 +12,10 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import HomelyDataUpdateCoordinator
-from .base_sensor import HomelySensorBase
+from .base_sensor import HomelyGatewayEntity, HomelySensorBase
 from .const import (
     DOMAIN,
     RE_ENTRY_SENSOR,
@@ -437,44 +435,8 @@ class HomelyEnergyCheckSensor(HomelyBinarySensorBase):
         return state
 
 
-class HomelyGatewayBinarySensorBase(
-    CoordinatorEntity[HomelyDataUpdateCoordinator], BinarySensorEntity
-):
+class HomelyGatewayBinarySensorBase(HomelyGatewayEntity, BinarySensorEntity):
     """Base for binary sensors on the Homely gateway (hjemmesentral) device."""
-
-    _attr_has_entity_name = True
-
-    def __init__(
-        self,
-        coordinator: HomelyDataUpdateCoordinator,
-        location_id: str,
-        gateway: Gateway,
-    ) -> None:
-        """Initialize a gateway binary sensor."""
-        super().__init__(coordinator)
-        self._location_id = location_id
-        self._gateway_serial = gateway.serial_number
-
-    def _gateway(self) -> Gateway | None:
-        """Return the current gateway state from the coordinator."""
-        home = self.coordinator.get_home_state(self._location_id)
-        return home.gateway if home else None
-
-    @property
-    def device_info(self) -> dr.DeviceInfo:
-        """Attach to the existing gateway/alarm device, enriched with firmware."""
-        firmware: str | None = None
-        gw = self._gateway()
-        if gw and gw.features and gw.features.status:
-            state = gw.features.status.states.firmware_version
-            firmware = state.value if state else None
-        return dr.DeviceInfo(
-            identifiers={(DOMAIN, self._location_id)},
-            manufacturer="Homely",
-            model="Homely Alarm Gateway",
-            serial_number=self._gateway_serial,
-            sw_version=firmware,
-        )
 
 
 class HomelyGatewayAcPowerSensor(HomelyGatewayBinarySensorBase):

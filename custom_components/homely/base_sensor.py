@@ -15,6 +15,7 @@ from .coordinator import HomelyDataUpdateCoordinator
 from .const import DOMAIN
 from .models import (
     Device,
+    Gateway,
     SensorState,
 )
 
@@ -131,3 +132,45 @@ class HomelySensorBase[T: (bool, int, float, str)](
         if self.last_updated and isinstance(self.last_updated, datetime):
             attrs["last_updated"] = self.last_updated
         return attrs
+
+
+class HomelyGatewayEntity(CoordinatorEntity[HomelyDataUpdateCoordinator]):
+    """Shared base for entities on the gateway (hjemmesentral) device.
+
+    Attaches to the existing gateway/alarm device (identified by location_id)
+    and enriches it with the gateway firmware version.
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize a gateway entity."""
+        super().__init__(coordinator)
+        self._location_id = location_id
+        self._gateway_serial = gateway.serial_number
+
+    def _gateway(self) -> Gateway | None:
+        """Return the current gateway state from the coordinator."""
+        home = self.coordinator.get_home_state(self._location_id)
+        return home.gateway if home else None
+
+    @property
+    def device_info(self) -> dr.DeviceInfo:
+        """Attach to the gateway/alarm device, enriched with firmware."""
+        firmware: str | None = None
+        gw = self._gateway()
+        if gw and gw.features and gw.features.status:
+            state = gw.features.status.states.firmware_version
+            firmware = state.value if state else None
+        return dr.DeviceInfo(
+            identifiers={(DOMAIN, self._location_id)},
+            manufacturer="Homely",
+            model="Homely Alarm Gateway",
+            serial_number=self._gateway_serial,
+            sw_version=firmware,
+        )
