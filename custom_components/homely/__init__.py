@@ -32,6 +32,7 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
+    Platform.EVENT,
 ]
 
 # Module-level rate limit tracker — persists across setup retries within the same HA run.

@@ -358,6 +358,9 @@ class HomelyHomeState(HomeResponse):
     Extends HomeResponse with methods to update and handle Homely home state data.
     """
 
+    # Last alarm-state-changed event received over WebSocket (carries who/when).
+    last_alarm_event: WsAlarmChangeData | None = None
+
     @classmethod
     def from_ws_event(
         cls,
@@ -490,6 +493,7 @@ class HomelyHomeState(HomeResponse):
                 + f" location ID {self.location_id} of this home state"
             )
         self.alarm_state = update_data.state
+        self.last_alarm_event = update_data
 
 
 class HomelyWebSocketClient:

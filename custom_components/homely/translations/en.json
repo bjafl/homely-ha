@@ -117,6 +117,11 @@
       "remaining_pin_attempts": {
         "name": "Remaining PIN Attempts"
       }
+    },
+    "event": {
+      "alarm_action": {
+        "name": "Alarm Action"
+      }
     }
   }
 }

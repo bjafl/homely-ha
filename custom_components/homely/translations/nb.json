@@ -117,6 +117,11 @@
       "remaining_pin_attempts": {
         "name": "Gjenstående PIN-forsøk"
       }
+    },
+    "event": {
+      "alarm_action": {
+        "name": "Alarmhandling"
+      }
     }
   }
 }

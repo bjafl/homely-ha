@@ -52,8 +52,8 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 ## Hendelseslogg → HA (Tabell 2/3) — ⬜
 | Tiltak | Kilde | Status |
 |---|---|---|
-| `event.homely_alarm_action` (arm/disarm + hvem) | WS `alarm-state-changed` + history-log | ⬜ |
-| `event.homely_zone_event` (entry/zone-faults) | `/gateways/{id}/history-log` | ⬜ |
+| `event.alarm_action` (arm/disarm + hvem) | WS `alarm-state-changed` | ✅ (lagrer `last_alarm_event`, fyrer på coordinator-update) |
+| `event.homely_zone_event` (entry/zone-faults) | `/gateways/{id}/history-log` | ⬜ (krever nytt kall) |
 | `remainingPinAttempts`-sensor (diag, på alarm-enheten) | `/home` | ✅ |
 
 ## Oppfølging / polish
