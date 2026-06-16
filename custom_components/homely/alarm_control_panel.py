@@ -28,16 +28,18 @@ _ALARM_STATE_MAP: dict[AlarmState, AlarmControlPanelState] = {
     AlarmState.DISARMED: AlarmControlPanelState.DISARMED,
     AlarmState.ARMED_AWAY: AlarmControlPanelState.ARMED_AWAY,
     AlarmState.ARMED_NIGHT: AlarmControlPanelState.ARMED_NIGHT,
-    AlarmState.ARMED_PARTLY: AlarmControlPanelState.ARMED_HOME,
+    AlarmState.ARMED_STAY: AlarmControlPanelState.ARMED_HOME,
+    AlarmState.ARMED_PARTLY: AlarmControlPanelState.ARMED_HOME,  # SDK alias for stay
     AlarmState.BREACHED: AlarmControlPanelState.TRIGGERED,
-    # App API arming states
+    # Exit/arming delay -> ARMING
     AlarmState.ARM_PENDING: AlarmControlPanelState.ARMING,
     AlarmState.ARM_NIGHT_PENDING: AlarmControlPanelState.ARMING,
-    # SDK API legacy arming states
+    AlarmState.ARM_STAY_PENDING: AlarmControlPanelState.ARMING,
+    AlarmState.ARMED_NIGHT_PENDING: AlarmControlPanelState.ARMING,  # SDK legacy
+    AlarmState.ARMED_AWAY_PENDING: AlarmControlPanelState.ARMING,  # SDK legacy
+    # Entry delay (alarm pending before breach) -> PENDING
     AlarmState.ALARM_PENDING: AlarmControlPanelState.PENDING,
-    AlarmState.ALARM_STAY_PENDING: AlarmControlPanelState.ARMING,
-    AlarmState.ARMED_NIGHT_PENDING: AlarmControlPanelState.ARMING,
-    AlarmState.ARMED_AWAY_PENDING: AlarmControlPanelState.ARMING,
+    AlarmState.ALARM_STAY_PENDING: AlarmControlPanelState.PENDING,
 }
 
 
@@ -129,7 +131,7 @@ class HomelyAlarmControlPanel(
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Arm alarm in home (partly) mode."""
         try:
-            await self.coordinator.api.arm_alarm(self._location_id, "ARMED_PARTLY")
+            await self.coordinator.api.arm_alarm(self._location_id, "ARMED_STAY")
         except HomelyError as err:
             _LOGGER.error("Failed to arm Homely alarm (home): %s", err)
 

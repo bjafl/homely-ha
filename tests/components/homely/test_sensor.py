@@ -333,10 +333,13 @@ class TestHomelyAlarmStateSensor:
         test_cases = [
             (AlarmState.DISARMED, AlarmControlPanelState.DISARMED),
             (AlarmState.ARMED_AWAY, AlarmControlPanelState.ARMED_AWAY),
+            (AlarmState.ARMED_STAY, AlarmControlPanelState.ARMED_HOME),
             (AlarmState.ARMED_PARTLY, AlarmControlPanelState.ARMED_HOME),
             (AlarmState.ARMED_NIGHT, AlarmControlPanelState.ARMED_NIGHT),
             (AlarmState.BREACHED, AlarmControlPanelState.TRIGGERED),
+            (AlarmState.ARM_STAY_PENDING, AlarmControlPanelState.ARMING),
             (AlarmState.ALARM_PENDING, AlarmControlPanelState.PENDING),
+            (AlarmState.ALARM_STAY_PENDING, AlarmControlPanelState.PENDING),
         ]
 
         for homely_state, expected_ha_state in test_cases:
@@ -360,7 +363,9 @@ class TestHomelyAlarmStateSensor:
             (AlarmState.BREACHED, HomelyEntityIcons.ALARM_TRIGGERED),
             (AlarmState.ALARM_PENDING, HomelyEntityIcons.ALARM_PENDING),
             (None, HomelyEntityIcons.ALARM_UNKNOWN),
-            (AlarmState.ALARM_STAY_PENDING, HomelyEntityIcons.ALARM_ARMING),
+            # Entry-delay (stay) -> PENDING -> pending icon
+            (AlarmState.ALARM_STAY_PENDING, HomelyEntityIcons.ALARM_PENDING),
+            (AlarmState.ARM_STAY_PENDING, HomelyEntityIcons.ALARM_ARMING),
         ]
 
         for alarm_state, expected_icon in test_cases:

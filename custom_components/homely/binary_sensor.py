@@ -12,7 +12,9 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import HomelyDataUpdateCoordinator
 from .base_sensor import HomelySensorBase
@@ -25,6 +27,7 @@ from .const import (
 )
 from .models import (
     Device,
+    Gateway,
     SensorState,
 )
 
@@ -68,8 +71,35 @@ async def async_setup_entry(
                 coordinator, location_id, device
             )
             entities.extend(dev_entities)
+        entities.extend(
+            create_gateway_binary_entities(
+                coordinator, location_id, getattr(home_state, "gateway", None)
+            )
+        )
 
     async_add_entities(entities)
+
+
+def create_gateway_binary_entities(
+    coordinator: HomelyDataUpdateCoordinator,
+    location_id: str,
+    gateway: Gateway | None,
+) -> list[HomelyGatewayBinarySensorBase]:
+    """Create binary sensors for the gateway (hjemmesentral) device."""
+    if gateway is None:
+        return []
+    entities: list[HomelyGatewayBinarySensorBase] = [
+        HomelyGatewayOnlineSensor(coordinator, location_id, gateway)
+    ]
+    power = gateway.features.power if gateway.features else None
+    if power is not None:
+        if power.states.ac_power is not None:
+            entities.append(HomelyGatewayAcPowerSensor(coordinator, location_id, gateway))
+        if power.states.battery_low is not None:
+            entities.append(
+                HomelyGatewayBatteryLowSensor(coordinator, location_id, gateway)
+            )
+    return entities
 
 
 def pick_alarm_classes(device: Device) -> list[type[HomelyAlarmSensor]] | None:
@@ -405,3 +435,117 @@ class HomelyEnergyCheckSensor(HomelyBinarySensorBase):
         if (state := device.features.metering.states.check) is not None:
             self.last_updated = state.last_updated
         return state
+
+
+class HomelyGatewayBinarySensorBase(
+    CoordinatorEntity[HomelyDataUpdateCoordinator], BinarySensorEntity
+):
+    """Base for binary sensors on the Homely gateway (hjemmesentral) device."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize a gateway binary sensor."""
+        super().__init__(coordinator)
+        self._location_id = location_id
+        self._gateway_serial = gateway.serial_number
+
+    def _gateway(self) -> Gateway | None:
+        """Return the current gateway state from the coordinator."""
+        home = self.coordinator.get_home_state(self._location_id)
+        return home.gateway if home else None
+
+    @property
+    def device_info(self) -> dr.DeviceInfo:
+        """Attach to the existing gateway/alarm device, enriched with firmware."""
+        firmware: str | None = None
+        gw = self._gateway()
+        if gw and gw.features and gw.features.status:
+            state = gw.features.status.states.firmware_version
+            firmware = state.value if state else None
+        return dr.DeviceInfo(
+            identifiers={(DOMAIN, self._location_id)},
+            manufacturer="Homely",
+            model="Homely Alarm Gateway",
+            serial_number=self._gateway_serial,
+            sw_version=firmware,
+        )
+
+
+class HomelyGatewayAcPowerSensor(HomelyGatewayBinarySensorBase):
+    """Whether the gateway is running on mains power."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize the AC power sensor."""
+        super().__init__(coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_ac_power"
+        self._attr_translation_key = "gateway_ac_power"
+        self._attr_device_class = BinarySensorDeviceClass.POWER
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if running on mains power."""
+        gw = self._gateway()
+        if not gw or not gw.features or not gw.features.power:
+            return None
+        state = gw.features.power.states.ac_power
+        return bool(state.value) if state and state.value is not None else None
+
+
+class HomelyGatewayBatteryLowSensor(HomelyGatewayBinarySensorBase):
+    """Whether the gateway backup battery is low."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize the battery low sensor."""
+        super().__init__(coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_battery_low"
+        self._attr_translation_key = "gateway_battery_low"
+        self._attr_device_class = BinarySensorDeviceClass.BATTERY
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the backup battery is low."""
+        gw = self._gateway()
+        if not gw or not gw.features or not gw.features.power:
+            return None
+        state = gw.features.power.states.battery_low
+        return bool(state.value) if state and state.value is not None else None
+
+
+class HomelyGatewayOnlineSensor(HomelyGatewayBinarySensorBase):
+    """Whether the gateway is online/connected."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        """Initialize the connectivity sensor."""
+        super().__init__(coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_online"
+        self._attr_translation_key = "gateway_online"
+        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the gateway is online."""
+        gw = self._gateway()
+        return bool(gw.online) if gw else None

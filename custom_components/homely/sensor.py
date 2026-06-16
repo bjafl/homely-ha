@@ -22,6 +22,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from custom_components.homely.homely_api import HomelyHomeState
 
+from .alarm_control_panel import _ALARM_STATE_MAP as _PANEL_ALARM_STATE_MAP
 from .coordinator import HomelyDataUpdateCoordinator
 from .base_sensor import HomelySensorBase, HomelySensorBaseAny
 from .const import DOMAIN, HomelyEntityIcons
@@ -175,21 +176,9 @@ class HomelyAlarmStateSensor(
 ):
     """Alarm state sensor for Homely gateway."""
 
-    _ALARM_STATE_MAP = {
-        AlarmState.DISARMED: AlarmControlPanelState.DISARMED,
-        AlarmState.ARMED_PARTLY: AlarmControlPanelState.ARMED_HOME,
-        AlarmState.ARMED_AWAY: AlarmControlPanelState.ARMED_AWAY,
-        AlarmState.ARMED_NIGHT: AlarmControlPanelState.ARMED_NIGHT,
-        AlarmState.BREACHED: AlarmControlPanelState.TRIGGERED,
-        # App API arming states
-        AlarmState.ARM_PENDING: AlarmControlPanelState.ARMING,
-        AlarmState.ARM_NIGHT_PENDING: AlarmControlPanelState.ARMING,
-        # SDK API legacy arming states
-        AlarmState.ALARM_STAY_PENDING: AlarmControlPanelState.ARMING,
-        AlarmState.ARMED_NIGHT_PENDING: AlarmControlPanelState.ARMING,
-        AlarmState.ARMED_AWAY_PENDING: AlarmControlPanelState.ARMING,
-        AlarmState.ALARM_PENDING: AlarmControlPanelState.PENDING,
-    }
+    # Canonical mapping lives in alarm_control_panel.py; imported here so the
+    # alarm-state sensor and the alarm panel can never drift apart.
+    _ALARM_STATE_MAP = _PANEL_ALARM_STATE_MAP
 
     def __init__(
         self,

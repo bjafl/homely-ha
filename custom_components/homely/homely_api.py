@@ -40,6 +40,7 @@ from .models import (
     APITokens,
     Device,
     Feature,
+    Gateway,
     HomeResponse,
     Location,
     SensorState,
@@ -300,10 +301,12 @@ class HomelyApi:
 
         cached_location = self._locations.get(location_id)
         try:
+            gateway_data = home_data.get("gateway")
             home = HomeResponse(
                 location_id=home_data["location"]["id"],
                 name=home_data["location"].get("name"),
-                gateway_serial=home_data.get("gateway", {}).get("serialNumber"),
+                gateway_serial=(gateway_data or {}).get("serialNumber"),
+                gateway=Gateway.model_validate(gateway_data) if gateway_data else None,
                 alarm_state=alarm_state,
                 user_role=cached_location.role if cached_location else None,
                 devices=[Device.model_validate(d) for d in home_data.get("devices", [])],
@@ -314,7 +317,7 @@ class HomelyApi:
 
 
     async def arm_alarm(self, location_id: str, alarm_profile: str) -> None:
-        """Arm the alarm with the given profile (ARMED_AWAY / ARMED_NIGHT / ARMED_PARTLY)."""
+        """Arm the alarm with the given profile (ARMED_AWAY / ARMED_NIGHT / ARMED_STAY)."""
         response = await self._make_request(
             request_type="post",
             url=HomelyUrls.ALARM_ARM,

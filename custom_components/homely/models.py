@@ -1,5 +1,7 @@
 """Data structures and validation for Homely API interaction."""
 
+import logging
+import re
 from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated, Any, Literal
@@ -7,26 +9,69 @@ from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, TypeAdapter
 
+_LOGGER = logging.getLogger(__name__)
+
 # Custom types
 type StateValue = bool | int | float | str
 
 
 class AlarmState(str, Enum):
-    """Possible alarm states for Homely system."""
+    """Possible alarm states for Homely system.
+
+    Values are grounded in captured app-API (api.homely.no) traffic and the
+    documented SDK API (sdk.iotiliti.cloud). Arming (exit-delay) states use the
+    ARM_*_PENDING family; entry-delay states use the ALARM_*_PENDING family.
+    """
 
     DISARMED = "DISARMED"
     ARMED_AWAY = "ARMED_AWAY"
     ARMED_NIGHT = "ARMED_NIGHT"
+    ARMED_STAY = "ARMED_STAY"
+    # SDK API alias for stay/home mode — kept so either API value is accepted.
     ARMED_PARTLY = "ARMED_PARTLY"
     BREACHED = "BREACHED"
-    # App API (api.homely.no) uses ARM_PENDING / ARM_NIGHT_PENDING
+    # App API (api.homely.no) arming/exit-delay states
     ARM_PENDING = "ARM_PENDING"
     ARM_NIGHT_PENDING = "ARM_NIGHT_PENDING"
-    # SDK API legacy values (sdk.iotiliti.cloud) — kept for compatibility
+    ARM_STAY_PENDING = "ARM_STAY_PENDING"
+    # Entry-delay states (alarm pending before breach)
     ALARM_PENDING = "ALARM_PENDING"
     ALARM_STAY_PENDING = "ALARM_STAY_PENDING"
+    # SDK API legacy arming states — kept for compatibility
     ARMED_NIGHT_PENDING = "ARMED_NIGHT_PENDING"
     ARMED_AWAY_PENDING = "ARMED_AWAY_PENDING"
+    # Fallback for any value not yet known to this integration.
+    UNKNOWN = "UNKNOWN"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "AlarmState":
+        """Best-effort map an unrecognized state instead of raising.
+
+        A streamed alarm state must never crash or silently drop the update.
+        Unknown values are surfaced (with a warning) and classified by pattern
+        so a future Homely state still yields a sensible HA state:
+          ALARM*PENDING -> entry delay   (ALARM_PENDING)
+          ARM*PENDING   -> arming/exit   (ARM_PENDING)
+          ARMED*        -> armed          (ARMED_AWAY)
+          otherwise     -> UNKNOWN
+        """
+        text = str(value).upper()
+        # ALARM* must be checked before ARM* since "ALARM" contains "ARM".
+        if re.search(r"ALARM.*PENDING", text):
+            guess = cls.ALARM_PENDING
+        elif re.search(r"ARM.*PENDING", text):
+            guess = cls.ARM_PENDING
+        elif "ARMED" in text:
+            guess = cls.ARMED_AWAY
+        else:
+            guess = cls.UNKNOWN
+        _LOGGER.warning(
+            "Unknown Homely alarm state %r — best-effort mapping to %s. "
+            "Please report so it can be handled explicitly.",
+            value,
+            guess.value,
+        )
+        return guess
 
 
 class UserRole(str, Enum):
@@ -311,6 +356,86 @@ class Device(BaseModel):
     features: DeviceFeatures
 
 
+# Gateway (hjemmesentral) Models
+class GatewayPowerStates(BaseModel):
+    """Power/battery states reported by the gateway."""
+
+    model_config = ConfigDict(extra="allow")
+
+    ac_power: Annotated[SensorState[bool] | None, Field(alias="acPower")] = None
+    battery_percent: Annotated[
+        SensorState[int] | None, Field(alias="batteryPercent")
+    ] = None
+    battery_low: Annotated[SensorState[bool] | None, Field(alias="batteryLow")] = None
+    battery_voltage: Annotated[
+        SensorState[float] | None, Field(alias="batteryVoltage")
+    ] = None
+    power_source_voltage: Annotated[
+        SensorState[float] | None, Field(alias="powerSourceVoltage")
+    ] = None
+
+
+class GatewayConnectionStates(BaseModel):
+    """Connectivity states reported by the gateway."""
+
+    model_config = ConfigDict(extra="allow")
+
+    source: SensorState[str] | None = None
+
+
+class GatewayStatusStates(BaseModel):
+    """Firmware/status states reported by the gateway."""
+
+    model_config = ConfigDict(extra="allow")
+
+    firmware_version: Annotated[
+        SensorState[str] | None, Field(alias="firmwareVersion")
+    ] = None
+    firmware_target_version: Annotated[
+        SensorState[str] | None, Field(alias="firmwareTargetVersion")
+    ] = None
+
+
+class GatewayPowerFeature(BaseModel):
+    """Gateway power feature container."""
+
+    states: GatewayPowerStates
+
+
+class GatewayConnectionFeature(BaseModel):
+    """Gateway connection feature container."""
+
+    states: GatewayConnectionStates
+
+
+class GatewayStatusFeature(BaseModel):
+    """Gateway status feature container."""
+
+    states: GatewayStatusStates
+
+
+class GatewayFeatures(BaseModel):
+    """Collection of gateway telemetry features."""
+
+    model_config = ConfigDict(extra="allow")
+
+    power: GatewayPowerFeature | None = None
+    connection: GatewayConnectionFeature | None = None
+    status: GatewayStatusFeature | None = None
+
+
+class Gateway(BaseModel):
+    """Homely gateway (hjemmesentral) with telemetry features."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: UUID
+    serial_number: Annotated[str | None, Field(alias="serialNumber")] = None
+    model_id: Annotated[UUID | None, Field(alias="modelId")] = None
+    online: bool = True
+    features: GatewayFeatures | None = None
+
+
 # Home API Response Model — normalised from the nested app-API response
 class HomeResponse(BaseModel):
     """Complete home state from Homely API."""
@@ -318,6 +443,7 @@ class HomeResponse(BaseModel):
     location_id: UUID
     name: str | None = None
     gateway_serial: str | None = None
+    gateway: Gateway | None = None
     alarm_state: Annotated[
         AlarmState | None,
         BeforeValidator(lambda v: v.upper() if isinstance(v, str) else v),
