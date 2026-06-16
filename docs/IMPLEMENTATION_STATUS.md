@@ -84,23 +84,25 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 | Sirene AC/batteri/tamper | `siren.{acmains,battery,tamper}` | ✅ (POWER/BATTERY/TAMPER) |
 | Keypad tamper | `panel.tamper` | ✅ (TAMPER) |
 | Keypad batteri | `panel.battery` | ⬜ (dekkes av `battery`-feature) |
-| Røykvarsler-batteri | `alarm.{low,batteryDefect}` | ⬜ |
+| Røykvarsler-batteri | `alarm.{low,batteryDefect}` | ⛔ hoppet over — redundant (røykvarslerne har egen `battery`-feature; `alarm.low/batteryDefect` er `null` i dataene) |
 
-## Hendelseslogg → HA (Tabell 2/3) — ⬜
+## Hendelseslogg → HA (Tabell 2/3)
 | Tiltak | Kilde | Status |
 |---|---|---|
 | `event.alarm_action` (arm/disarm + hvem) | WS `alarm-state-changed` | ✅ (lagrer `last_alarm_event`, fyrer på coordinator-update) |
-| `event.homely_zone_event` (entry/zone-faults) | `/gateways/{id}/history-log` | ⬜ (krever nytt kall) |
+| `event.homely_zone_event` (entry/zone-faults) | `/gateways/{id}/history-log` | ⛔ **trenger beslutning** — nytt per-refresh REST-kall mot en paginert logg. Kolliderer med tidligere 429-rate-limit-problemer, og arm/disarm dekkes allerede av WS-event-entiteten. Bør hentes på egen, treg kadens hvis ønsket. |
 | `remainingPinAttempts`-sensor (diag, på alarm-enheten) | `/home` | ✅ |
 
 ## Oppfølging / polish
 | Tiltak | Status |
 |---|---|
 | Oversettelsesnøkler for gateway-entiteter (en + nb) | ✅ (alle 7 gateway-entiteter) |
+| GSM/wifi-signal (`/gateways/{id}/networks`) | ⛔ **trenger beslutning** — nytt per-refresh-kall for marginal verdi (tilkoblingskilde er allerede eksponert fra `/home`; testgateway er på ethernet, GSM=`NO_CONNECTION`). Rate-limit-risiko. |
 
-## Opprydding i eksisterende (Tabell 6) — ⬜
+## Opprydding i eksisterende (Tabell 6)
 | Tiltak | Status |
 |---|---|
-| Verifiser energi Wh→kWh-skalering | ⬜ |
+| Verifiser energi Wh→kWh-skalering | ⛔ **blokkert — ingen metering-enhet i fangsten.** `HomelyEnergySensor` deklarerer `KILO_WATT_HOUR` men returnerer rå `value` uten skalering. Hvis API-et gir Wh er dette **1000× feil**; hvis kWh er det riktig. **Ikke endre uten data** fra et Homely-oppsett med energimåler (Develco/Namron). |
+| Vurder fjerning av `metering.check`-sensor | ⛔ blokkert — ukjent semantikk, ingen metering-data i fangsten å undersøke |
 | Vurder fjerning av `metering.check`-sensor | ⬜ |
 | Thermostat: setpoints ut av attributter | ⬜ |
