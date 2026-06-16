@@ -347,7 +347,12 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             return
         try:
             prev_state = self.data[location_id]
-            new_state = HomelyHomeState.from_ws_event(prev_state, ws_event)
+            new_state = HomelyHomeState.from_ws_event(
+                prev_state,
+                ws_event,
+                ignore_unhandled_event_types=True,
+                ignore_missing_states=True,
+            )
             updated_data = self.data.copy()
             updated_data[location_id] = new_state
             self._ws_active[location_id] = True
@@ -366,6 +371,8 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
                 self.hass.async_create_task(self.async_request_refresh())
             else:
                 _LOGGER.debug("Skipping refresh request - too recent (rate limited)")
+        except Exception as err:
+            _LOGGER.error("Unexpected error in WebSocket update: %s", err, exc_info=True)
 
     async def _schedule_reconnect(self, location_id: str, attempt: int = 1) -> None:
         """Schedule WebSocket reconnection with exponential backoff."""

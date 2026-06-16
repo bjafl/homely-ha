@@ -436,7 +436,12 @@ class TestHomelyDataUpdateCoordinator:
             coordinator.async_set_updated_data = MagicMock()
             coordinator._handle_ws_update(TEST_LOCATION_ID, mock_event)
 
-            mock_from_ws.assert_called_once_with(mock_prev_state, mock_event)
+            mock_from_ws.assert_called_once_with(
+                mock_prev_state,
+                mock_event,
+                ignore_unhandled_event_types=True,
+                ignore_missing_states=True,
+            )
             coordinator.async_set_updated_data.assert_called_once()
             assert coordinator._ws_active[TEST_LOCATION_ID] is True
 
@@ -466,6 +471,54 @@ class TestHomelyDataUpdateCoordinator:
 
                 # Should trigger refresh on error
                 coordinator.async_request_refresh.assert_called_once()
+
+    def test_handle_ws_update_passes_ignore_flags(
+        self, hass, mock_config_entry, api_logged_in
+    ):
+        """Test that _handle_ws_update passes ignore flags to from_ws_event."""
+        coordinator = HomelyDataUpdateCoordinator(
+            hass,
+            mock_config_entry,
+            api=api_logged_in,
+            selected_location_ids=[TEST_LOCATION_ID],
+        )
+        mock_prev_state = MagicMock(spec=HomelyHomeState)
+        mock_new_state = MagicMock(spec=HomelyHomeState)
+        coordinator.data = {TEST_LOCATION_ID: mock_prev_state}
+        mock_event = MagicMock(spec=WsEvent)
+
+        with patch.object(
+            HomelyHomeState, "from_ws_event", return_value=mock_new_state
+        ) as mock_from_ws:
+            coordinator.async_set_updated_data = MagicMock()
+            coordinator._handle_ws_update(TEST_LOCATION_ID, mock_event)
+
+            mock_from_ws.assert_called_once_with(
+                mock_prev_state,
+                mock_event,
+                ignore_unhandled_event_types=True,
+                ignore_missing_states=True,
+            )
+
+    def test_handle_ws_update_unexpected_exception_caught(
+        self, hass, mock_config_entry, api_logged_in
+    ):
+        """Test that unexpected (non-HomelyError) exceptions are caught, not propagated."""
+        coordinator = HomelyDataUpdateCoordinator(
+            hass,
+            mock_config_entry,
+            api=api_logged_in,
+            selected_location_ids=[TEST_LOCATION_ID],
+        )
+        mock_prev_state = MagicMock(spec=HomelyHomeState)
+        coordinator.data = {TEST_LOCATION_ID: mock_prev_state}
+        mock_event = MagicMock(spec=WsEvent)
+
+        with patch.object(
+            HomelyHomeState, "from_ws_event", side_effect=RuntimeError("unexpected")
+        ):
+            # Should NOT raise — must be swallowed and logged
+            coordinator._handle_ws_update(TEST_LOCATION_ID, mock_event)
 
     async def test_schedule_reconnect(self, hass, mock_config_entry, api_logged_in):
         """Test scheduling websocket reconnection."""
