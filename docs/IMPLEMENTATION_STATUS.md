@@ -5,6 +5,42 @@
 >
 > Status: ✅ ferdig · 🚧 pågår · ⬜ ikke startet
 
+---
+
+## 🤝 Handoff til neste agent (les dette først)
+
+**Branch:** `feature/app-api` (IKKE merget til `main`). Alt arbeid under skjer her.
+
+**Kjør tester:** `.venv/bin/python -m pytest tests/ -p no:cacheprovider`
+- Coverage-gate: 85 % (ligger nå på ~90 %). Bruk `--no-cov` for raske enkeltkjøringer.
+- `ruff`/`mypy` er IKKE installert i `.venv` — de kjøres via pre-commit. Skriv mypy-ren kode (full annotering, ingen `# type: ignore`).
+- **TDD brukes konsekvent**: skriv failing test → se RED → minimal kode → GREEN. Se `superpowers:test-driven-development`.
+
+**Datakilder (fanget app-API-trafikk):**
+- `~/source/sniffs/homely_sniffs.json` — ren, filtrert Homely-trafikk (REST + WS). Primær referanse.
+- `/tmp/capture.mitm` — full mitmproxy-dump (rik gateway-logg her).
+- Analyse: `API_GAP_ANALYSIS.md`, `docs/SENSOR_DATA_MAPPING.md` (datamapping + entitetstype-tabeller).
+
+**Etablerte mønstre (følg disse):**
+- **Gateway-entiteter:** arve `HomelyGatewayEntity`-mixin (`base_sensor.py`) — fester på `(DOMAIN, location_id)`-enheten + setter firmware som `sw_version`. Brukt av gateway-sensorer i `binary_sensor.py` og `sensor.py`.
+- **Alarm-state:** `AlarmState`-enum har `_missing_` med regex-fallback (ukjent verdi → best-effort + WARNING, krasjer aldri). Kanonisk `_ALARM_STATE_MAP` bor i `alarm_control_panel.py` og importeres av `sensor.py` (ikke dupliser).
+- **Event-entitet:** `HomelyHomeState.last_alarm_event` lagrer siste WS-alarm-event; `event.py` fyrer på coordinator-update (replayer aldri pre-eksisterende event).
+- **Translations:** `custom_components/homely/translations/{en,nb}.json`, struktur `entity.<platform>.<key>.name`. **Legg til for HVER ny entitet** (begge språk).
+- **Test-mock:** `conftest.create_mock_device_features()` defaulter ALLE features til `None` (speiler modellen). Legger du til en ny feature i `DeviceFeatures`, legg den til som `None` der også.
+
+**Anbefalt neste steg (prioritert):**
+1. **#3 `isAlarmDevice`-deteksjon** (kall-fritt) — erstatt skjør `modelName`-regex i `binary_sensor.pick_alarm_classes` med `device.isAlarmDevice` + feature-tilstedeværelse. Krever å parse `isAlarmDevice` i `Device`-modellen.
+2. **#5 Opprydding** — verifiser energi-skalering (Wh→kWh i `HomelyEnergySensor`), vurder å fjerne `metering.check`-sensoren (uklar semantikk).
+3. **#4 GSM/wifi-signal** — nytt kall `GET /gateways/{id}/networks` (gsm.state/signalStrength/operator). Krever utvidelse av coordinator-henting.
+4. **#6 `event.homely_zone_event`** — zone-faults fra `GET /gateways/{id}/history-log` (nytt kall; rik logg med ac_mains_fault/battery_fault per sone).
+- Småting: røykvarsler-batteri via `alarm.{low,batteryDefect}`.
+- **Bevisst utelatt:** panikk/nødknapp (`armevent.emergencyevent`) — brukeren utsatte den.
+
+**Commits så langt på branchen (nyeste sist):**
+`3e3127e` alarm-robusthet+gateway · `f4af60c` docs · `4a8e9b9` gateway-tallsensorer+mixin · `d0d7288` remainingPinAttempts · `d1a4d6d` device-online · `03cd883` event-entitet · `3f81fb3` siren/keypad
+
+---
+
 ## Alarm-state-robusthet (tidligere arbeid)
 | Tiltak | Status | Hvor |
 |---|---|---|
