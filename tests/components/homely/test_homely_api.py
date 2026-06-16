@@ -596,3 +596,38 @@ class TestHomelyWebSocketClient:
 
         assert ws_client._should_disconnect is True
         mock_ws.close.assert_called_once()
+
+
+class TestGetField:
+    """Test the get_field alias-lookup function."""
+
+    def test_alias_lookup_resolves_networklinkstrength(self):
+        """get_field must resolve aliases, not just attribute names.
+
+        DiagnosticStates stores signal strength as `network_link_strength`
+        (Python attribute) but the API / WS uses the alias `networklinkstrength`.
+        A failing WS update (HomelyStateUpdateMissingTargetError) was caused by
+        the alias lookup silently returning None due to variable shadowing in the
+        generator expression.
+        """
+        from custom_components.homely.homely_api import get_field
+        from custom_components.homely.models import DiagnosticStates, SensorState
+
+        states = DiagnosticStates(
+            networklinkstrength=SensorState(value=74, lastUpdated=None)
+        )
+        result = get_field(states, "networklinkstrength")
+        assert result is not None
+        assert result.value == 74
+
+    def test_plain_attribute_lookup_still_works(self):
+        """Normal (non-alias) attribute lookup must not regress."""
+        from custom_components.homely.homely_api import get_field
+        from custom_components.homely.models import DiagnosticStates, SensorState
+
+        states = DiagnosticStates(
+            networklinkstrength=SensorState(value=55, lastUpdated=None)
+        )
+        result = get_field(states, "network_link_strength")
+        assert result is not None
+        assert result.value == 55

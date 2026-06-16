@@ -69,7 +69,7 @@ def get_field(obj: BaseModel | dict[str, Any], name: str) -> Any:
         return getattr(obj, name)
     obj_class = type(obj)
     field_name = next(
-        (name for name, field in obj_class.model_fields.items() if field.alias == name),
+        (fname for fname, field in obj_class.model_fields.items() if field.alias == name),
         None,
     )
     if field_name:
