@@ -41,6 +41,8 @@ from .models import (
     Device,
     Feature,
     Gateway,
+    GatewayLogEntry,
+    GatewayNetworks,
     HomeResponse,
     Location,
     SensorState,
@@ -152,7 +154,7 @@ class HomelyApi:
 
     async def _make_request(
         self,
-        request_type: Literal["get", "post"],
+        request_type: Literal["get", "post", "patch"],
         url: str,
         include_token: bool = False,
         **kwargs: Any,
@@ -166,6 +168,8 @@ class HomelyApi:
                     response = await self._client_session.get(url, **kwargs)
                 elif request_type == "post":
                     response = await self._client_session.post(url, **kwargs)
+                elif request_type == "patch":
+                    response = await self._client_session.patch(url, **kwargs)
                 else:
                     raise HomelyValueError(
                         f"Unexpected value for request_type: {request_type}"
@@ -349,6 +353,49 @@ class HomelyApi:
                 data = {}
             raise HomelyRequestError(
                 f"Failed to disarm alarm ({response.status})", data
+            )
+
+
+    async def get_gateway_networks(self, gateway_id: str) -> GatewayNetworks | None:
+        """Return connectivity detail for the gateway (GSM / Wi-Fi)."""
+        response = await self._make_request(
+            request_type="get",
+            url=f"{HomelyUrls.GATEWAYS}/{gateway_id}/networks",
+            include_token=True,
+        )
+        if not response.ok:
+            _LOGGER.warning("Gateway networks fetch failed (%s)", response.status)
+            return None
+        return GatewayNetworks.model_validate(await response.json())
+
+    async def get_gateway_log(self, gateway_id: str) -> list[GatewayLogEntry]:
+        """Return history-log entries for the gateway."""
+        response = await self._make_request(
+            request_type="get",
+            url=f"{HomelyUrls.GATEWAYS}/{gateway_id}/history-log",
+            include_token=True,
+        )
+        if not response.ok:
+            _LOGGER.warning("Gateway history-log fetch failed (%s)", response.status)
+            return []
+        data = await response.json()
+        return [GatewayLogEntry.model_validate(e) for e in (data or [])]
+
+    async def mark_gateway_log_read(self, gateway_id: str) -> None:
+        """Mark all gateway history-log entries as acknowledged."""
+        response = await self._make_request(
+            request_type="patch",
+            url=f"{HomelyUrls.GATEWAYS}/{gateway_id}/history-log",
+            include_token=True,
+            json={"acknowledgeAll": True},
+        )
+        if not response.ok:
+            try:
+                data = await response.json()
+            except Exception:
+                data = {}
+            raise HomelyRequestError(
+                f"Failed to mark gateway log as read ({response.status})", data
             )
 
 

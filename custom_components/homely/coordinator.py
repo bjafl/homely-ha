@@ -12,6 +12,8 @@ from homeassistant.helpers.aiohttp_client import (
 )
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from typing import TypedDict
+
 from .const import DOMAIN, FALLBACK_SCAN_INTERVAL
 from .exceptions import HomelyError, HomelyRateLimitError, HomelyWebSocketError
 from .homely_api import (
@@ -19,10 +21,48 @@ from .homely_api import (
     HomelyHomeState,
     HomelyWebSocketClient,
 )
-from .models import Location, WsEvent
-from .models import Device
+from .models import GatewayLogEntry, GatewayNetworks, Location, WsEvent
+from .models import Device, count_unread_log_entries
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class GatewayExtrasData(TypedDict):
+    """Data returned by GatewayExtrasCoordinator."""
+
+    networks: GatewayNetworks | None
+    log_entries: list[GatewayLogEntry]
+    unread_count: int
+
+
+class GatewayExtrasCoordinator(DataUpdateCoordinator[GatewayExtrasData]):
+    """Slow-poll coordinator that fetches gateway networks + history-log once per hour."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: HomelyApi,
+        gateway_id: str,
+        location_id: str,
+    ) -> None:
+        self.api = api
+        self.gateway_id = gateway_id
+        self.location_id = location_id
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN} gateway extras ({location_id})",
+            update_interval=timedelta(hours=1),
+        )
+
+    async def _async_update_data(self) -> GatewayExtrasData:
+        networks = await self.api.get_gateway_networks(self.gateway_id)
+        log_entries = await self.api.get_gateway_log(self.gateway_id)
+        return GatewayExtrasData(
+            networks=networks,
+            log_entries=log_entries,
+            unread_count=count_unread_log_entries(log_entries),
+        )
 
 
 class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeState]]):
@@ -58,6 +98,7 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         self._ws_clients: dict[str, HomelyWebSocketClient] = {}
         self._ws_tasks: dict[str, asyncio.Task] = {}
         self._reconnect_tasks: dict[str, asyncio.Task] = {}
+        self.gateway_extras_coordinators: dict[str, GatewayExtrasCoordinator] = {}
         self._ws_active: dict[str, bool] = {}
         self._shutting_down: bool = False
         self._last_error_refresh: float = 0

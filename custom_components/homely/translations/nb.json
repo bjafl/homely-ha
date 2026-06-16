@@ -128,6 +128,20 @@
       },
       "remaining_pin_attempts": {
         "name": "Gjenstående PIN-forsøk"
+      },
+      "gateway_gsm_signal": {
+        "name": "GSM-signal"
+      },
+      "gateway_unread_log": {
+        "name": "Uleste loggoppføringer"
+      }
+    },
+    "button": {
+      "gateway_extras_refresh": {
+        "name": "Oppdater hjemmesentral nå"
+      },
+      "gateway_mark_log_read": {
+        "name": "Marker logg som lest"
       }
     },
     "event": {

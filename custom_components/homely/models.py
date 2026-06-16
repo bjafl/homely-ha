@@ -466,6 +466,49 @@ class Gateway(BaseModel):
     features: GatewayFeatures | None = None
 
 
+# Gateway extras — fetched on a slow cadence (networks + history log)
+class GatewayGsm(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    state: str | None = None
+    signal_strength: Annotated[str | None, Field(alias="signalStrength")] = None
+    network_operator_name: Annotated[
+        str | None, Field(alias="networkOperatorName")
+    ] = None
+
+
+class GatewayWifi(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    name: str | None = None
+    connected: bool | None = None
+
+
+class GatewayNetworks(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    connection_source: Annotated[
+        str | None, Field(alias="connectionSource")
+    ] = None
+    wifi_network: Annotated[GatewayWifi | None, Field(alias="wifiNetwork")] = None
+    gsm: GatewayGsm | None = None
+
+
+class GatewayLogEntry(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: int
+    status: str
+    type: str
+
+
+_SEEN_LOG_STATUSES = frozenset({"read", "acknowledged"})
+
+
+def count_unread_log_entries(entries: list[GatewayLogEntry]) -> int:
+    return sum(1 for e in entries if e.status not in _SEEN_LOG_STATUSES)
+
+
 # Home API Response Model — normalised from the nested app-API response
 class HomeResponse(BaseModel):
     """Complete home state from Homely API."""

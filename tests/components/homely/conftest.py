@@ -365,6 +365,7 @@ def mock_coordinator_basic(hass) -> MagicMock:
     coordinator = MagicMock(spec=HomelyDataUpdateCoordinator)
     coordinator.hass = hass
     coordinator.location_id = TEST_LOCATION_ID
+    coordinator.gateway_extras_coordinators = {}
     # coordinator.get_device_state = MagicMock()
     return coordinator
 

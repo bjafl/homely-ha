@@ -128,6 +128,20 @@
       },
       "remaining_pin_attempts": {
         "name": "Remaining PIN Attempts"
+      },
+      "gateway_gsm_signal": {
+        "name": "GSM Signal"
+      },
+      "gateway_unread_log": {
+        "name": "Unread Log Entries"
+      }
+    },
+    "button": {
+      "gateway_extras_refresh": {
+        "name": "Update Gateway Info Now"
+      },
+      "gateway_mark_log_read": {
+        "name": "Mark Log as Read"
       }
     },
     "event": {

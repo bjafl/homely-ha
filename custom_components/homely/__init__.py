@@ -15,7 +15,7 @@ from homeassistant.helpers.device_registry import DeviceRegistry
 from .const import DOMAIN
 
 # from .exceptions import HomelyError, HomelyConfigAuthError
-from .coordinator import HomelyDataUpdateCoordinator
+from .coordinator import GatewayExtrasCoordinator, HomelyDataUpdateCoordinator
 from .exceptions import (
     HomelyAuthError,
     HomelyAuthExpiredError,
@@ -130,6 +130,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 CONF_LOCATION: valid_selected,
             },
         )
+    # Create slow-poll gateway extras coordinators (1h interval) for each location
+    for loc_id in valid_selected:
+        home_state = coordinator.get_home_state(loc_id)
+        gateway_serial = getattr(home_state, "gateway_serial", None) if home_state else None
+        if gateway_serial:
+            extras = GatewayExtrasCoordinator(hass, api, gateway_serial, loc_id)
+            try:
+                await extras.async_config_entry_first_refresh()
+            except Exception as err:
+                _LOGGER.warning("Gateway extras first refresh failed for %s: %s", loc_id, err)
+            coordinator.gateway_extras_coordinators[loc_id] = extras
+
     # Store coordinator in hass data
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator

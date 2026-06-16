@@ -28,7 +28,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from custom_components.homely.homely_api import HomelyHomeState
 
 from .alarm_control_panel import _ALARM_STATE_MAP as _PANEL_ALARM_STATE_MAP
-from .coordinator import HomelyDataUpdateCoordinator
+from .coordinator import GatewayExtrasCoordinator, HomelyDataUpdateCoordinator
 from .base_sensor import HomelyGatewayEntity, HomelySensorBase, HomelySensorBaseAny
 from .const import DOMAIN, HomelyEntityIcons
 from .models import (
@@ -92,6 +92,19 @@ async def async_setup_entry(
                 ),
             )
         )
+
+        extras = coordinator.gateway_extras_coordinators.get(location_id)
+        gateway = getattr(home_state, "gateway", None)
+        if extras is not None and gateway is not None:
+            entities.extend(
+                cast(
+                    list[HomelySensorBaseAny],
+                    [
+                        HomelyGatewayGsmSignalSensor(extras, coordinator, location_id, gateway),
+                        HomelyGatewayUnreadLogSensor(extras, coordinator, location_id, gateway),
+                    ],
+                )
+            )
 
     async_add_entities(entities)
 
@@ -703,3 +716,97 @@ class HomelyRemainingPinAttemptsSensor(
         """Return the number of remaining PIN attempts."""
         home = self.coordinator.get_home_state(self._location_id)
         return home.remaining_pin_attempts if home else None
+
+
+class HomelyGatewayExtrasEntity(CoordinatorEntity["GatewayExtrasCoordinator"], SensorEntity):
+    """Base for sensors driven by the slow-poll GatewayExtrasCoordinator."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        extras_coordinator: "GatewayExtrasCoordinator",
+        main_coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        super().__init__(extras_coordinator)
+        self._main_coordinator = main_coordinator
+        self._location_id = location_id
+        self._gateway_serial = gateway.serial_number
+
+    @property
+    def device_info(self) -> dr.DeviceInfo:
+        firmware: str | None = None
+        home = self._main_coordinator.get_home_state(self._location_id)
+        gw = home.gateway if home else None
+        if gw and gw.features and gw.features.status:
+            state = gw.features.status.states.firmware_version
+            firmware = state.value if state else None
+        return dr.DeviceInfo(
+            identifiers={(DOMAIN, self._location_id)},
+            manufacturer="Homely",
+            model="Homely Alarm Gateway",
+            serial_number=self._gateway_serial,
+            sw_version=firmware,
+        )
+
+
+class HomelyGatewayGsmSignalSensor(HomelyGatewayExtrasEntity):
+    """GSM signal strength reported by the gateway."""
+
+    def __init__(
+        self,
+        extras_coordinator: "GatewayExtrasCoordinator",
+        main_coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        super().__init__(extras_coordinator, main_coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_gsm_signal"
+        self._attr_translation_key = "gateway_gsm_signal"
+        self._attr_device_class = SensorDeviceClass.ENUM
+        self._attr_options = [
+            "NO_CONNECTION", "VERY_LOW", "LOW", "MEDIUM", "HIGH", "VERY_HIGH"
+        ]
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str | None:
+        data = self.coordinator.data
+        if not data or not data.get("networks"):
+            return None
+        gsm = data["networks"].gsm
+        return gsm.signal_strength if gsm else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        data = self.coordinator.data
+        if not data or not data.get("networks"):
+            return None
+        gsm = data["networks"].gsm
+        if not gsm:
+            return None
+        return {"network_operator": gsm.network_operator_name}
+
+
+class HomelyGatewayUnreadLogSensor(HomelyGatewayExtrasEntity):
+    """Number of unread history-log entries on the gateway."""
+
+    def __init__(
+        self,
+        extras_coordinator: "GatewayExtrasCoordinator",
+        main_coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        gateway: Gateway,
+    ) -> None:
+        super().__init__(extras_coordinator, main_coordinator, location_id, gateway)
+        self._attr_unique_id = f"{location_id}_gateway_unread_log"
+        self._attr_translation_key = "gateway_unread_log"
+        self._attr_icon = "mdi:bell-badge"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> int | None:
+        data = self.coordinator.data
+        return data["unread_count"] if data else None

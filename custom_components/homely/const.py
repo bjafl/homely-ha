@@ -28,6 +28,7 @@ class HomelyUrls:
     ALARM_STATE = f"{BASE}/alarm/state"
     ALARM_ARM = f"{BASE}/alarm/arm"
     ALARM_DISARM = f"{BASE}/alarm/disarm"
+    GATEWAYS = f"{BASE}/gateways"
     WEBSOCKET = f"https://{ORIGIN}"
 
 
