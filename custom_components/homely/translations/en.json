@@ -75,6 +75,9 @@
       },
       "gateway_online": {
         "name": "Connected"
+      },
+      "device_online": {
+        "name": "Connectivity"
       }
     },
     "sensor": {

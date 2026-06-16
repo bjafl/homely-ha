@@ -13,6 +13,7 @@ from custom_components.homely.binary_sensor import (
     HomelyBatteryDefectSensor,
     HomelyBatteryLowSensor,
     HomelyBinarySensorBase,
+    HomelyDeviceOnlineSensor,
     HomelyEnergyCheckSensor,
     HomelyEntrySensor,
     HomelyFloodSensor,
@@ -189,7 +190,8 @@ class TestCreateBinaryEntitiesFromDevice:
             mock_coordinator_basic, TEST_LOCATION_ID, mock_device
         )
 
-        assert len(entities) == 2
+        # online (connectivity) sensor is always created, plus the 2 battery ones
+        assert len(entities) == 3
         assert any(isinstance(e, HomelyBatteryLowSensor) for e in entities)
         assert any(isinstance(e, HomelyBatteryDefectSensor) for e in entities)
 
@@ -205,8 +207,9 @@ class TestCreateBinaryEntitiesFromDevice:
             mock_coordinator_basic, TEST_LOCATION_ID, mock_device
         )
 
-        assert len(entities) == 1
-        assert isinstance(entities[0], HomelyEnergyCheckSensor)
+        # online (connectivity) sensor is always created, plus the energy check
+        assert len(entities) == 2
+        assert any(isinstance(e, HomelyEnergyCheckSensor) for e in entities)
 
     def test_create_multiple_sensors(self, mock_coordinator_basic):
         """Test creating multiple sensors from one device."""
@@ -226,7 +229,7 @@ class TestCreateBinaryEntitiesFromDevice:
         assert any(isinstance(e, HomelyBatteryLowSensor) for e in entities)
 
     def test_create_no_sensors(self, mock_coordinator_basic):
-        """Test creating no sensors when device has no features."""
+        """A featureless device still gets the always-on connectivity sensor."""
         mock_device = create_mock_device()
         mock_device.features.alarm = None
         mock_device.features.battery = None
@@ -236,7 +239,8 @@ class TestCreateBinaryEntitiesFromDevice:
             mock_coordinator_basic, TEST_LOCATION_ID, mock_device
         )
 
-        assert len(entities) == 0
+        assert len(entities) == 1
+        assert isinstance(entities[0], HomelyDeviceOnlineSensor)
 
 
 class TestHomelyBinarySensorBase:

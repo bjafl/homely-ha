@@ -75,6 +75,9 @@
       },
       "gateway_online": {
         "name": "Tilkoblet"
+      },
+      "device_online": {
+        "name": "Tilkobling"
       }
     },
     "sensor": {

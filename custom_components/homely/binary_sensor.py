@@ -129,6 +129,7 @@ def create_binary_entities_from_device(
     """Create binary sensor entities based on device capabilities."""
     entities: list[HomelySensorBase[bool]] = []
     sensor_args = (coordinator, location_id, device)
+    entities.append(HomelyDeviceOnlineSensor(*sensor_args))
     if (alarm_classes := pick_alarm_classes(device)) is not None:
         for alarm_cls in alarm_classes:
             _LOGGER.debug(
@@ -433,6 +434,30 @@ class HomelyEnergyCheckSensor(HomelyBinarySensorBase):
         if (state := device.features.metering.states.check) is not None:
             self.last_updated = state.last_updated
         return state
+
+
+class HomelyDeviceOnlineSensor(HomelyBinarySensorBase):
+    """Connectivity sensor for an individual Homely device."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        device: Device,
+    ) -> None:
+        """Initialize the device online sensor."""
+        super().__init__(coordinator, location_id, device)
+        self._attr_unique_id = f"{self.device_id}_online"
+        self.has_entity_name = True
+        self._attr_translation_key = "device_online"
+        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the device is online."""
+        device = self._get_current_device_state()
+        return bool(device.online) if device else None
 
 
 class HomelyGatewayBinarySensorBase(HomelyGatewayEntity, BinarySensorEntity):

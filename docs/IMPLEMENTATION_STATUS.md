@@ -37,7 +37,7 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 |---|---|---|
 | `via_device` → gateway | (via `location_id`) | ✅ (allerede i `base_sensor`) |
 | manufacturer | serie-prefiks (`get_manufacturer`) | ✅ delvis — kan suppleres med `modelVendor` |
-| Online per enhet | `online` | ⬜ |
+| Online per enhet | `online` | ✅ (binary_sensor CONNECTIVITY per enhet) |
 | Robust deteksjon via `isAlarmDevice` | `isAlarmDevice` | ⬜ |
 | Alarmprofil/-reaksjon som diag-attr | `alarmProfile*`/`alarmReaction*` | ⬜ |
 
