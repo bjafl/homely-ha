@@ -255,7 +255,7 @@ class TestHomelyDataUpdateCoordinator:
     async def test_async_update_data_unexpected_error(
         self, hass, mock_config_entry, api_logged_in_with_locations
     ):
-        """Test data update with unexpected error."""
+        """Test data update with unexpected error raises UpdateFailed when no cached data."""
         coordinator = HomelyDataUpdateCoordinator(
             hass,
             mock_config_entry,
@@ -267,6 +267,44 @@ class TestHomelyDataUpdateCoordinator:
 
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
+
+    async def test_async_update_data_api_error_returns_cached_data(
+        self, hass, mock_config_entry, api_logged_in_with_locations
+    ):
+        """Test data update returns cached data on HomelyError when cache exists."""
+        coordinator = HomelyDataUpdateCoordinator(
+            hass,
+            mock_config_entry,
+            api=api_logged_in_with_locations,
+            selected_location_ids=[TEST_LOCATION_ID],
+        )
+        cached_state = MagicMock(spec=HomelyHomeState)
+        coordinator.data = {TEST_LOCATION_ID: cached_state}
+
+        coordinator.api.get_home = AsyncMock(side_effect=HomelyError("API Error"))
+
+        result = await coordinator._async_update_data()
+
+        assert result == coordinator.data
+
+    async def test_async_update_data_unexpected_error_returns_cached_data(
+        self, hass, mock_config_entry, api_logged_in_with_locations
+    ):
+        """Test data update returns cached data on unexpected Exception when cache exists."""
+        coordinator = HomelyDataUpdateCoordinator(
+            hass,
+            mock_config_entry,
+            api=api_logged_in_with_locations,
+            selected_location_ids=[TEST_LOCATION_ID],
+        )
+        cached_state = MagicMock(spec=HomelyHomeState)
+        coordinator.data = {TEST_LOCATION_ID: cached_state}
+
+        coordinator.api.get_home = AsyncMock(side_effect=RuntimeError("crash"))
+
+        result = await coordinator._async_update_data()
+
+        assert result == coordinator.data
 
     async def test_async_reload_selected_locations(
         self, hass, mock_config_entry, api_logged_in

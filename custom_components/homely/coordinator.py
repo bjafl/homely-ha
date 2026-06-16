@@ -230,10 +230,14 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
                 return self.data
             raise UpdateFailed(str(err)) from err
         except HomelyError as err:
-            _LOGGER.error("API error: %s", err)
+            _LOGGER.warning("API error during refresh: %s", err)
+            if self.data:
+                return self.data
             raise UpdateFailed(err) from err
         except Exception as err:
             _LOGGER.error("Unexpected error: %s", err, exc_info=True)
+            if self.data:
+                return self.data
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
         return new_data
