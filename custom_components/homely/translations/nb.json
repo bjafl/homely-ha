@@ -78,6 +78,18 @@
       },
       "device_online": {
         "name": "Tilkobling"
+      },
+      "siren_acmains": {
+        "name": "Sirene nettstrøm"
+      },
+      "siren_tamper": {
+        "name": "Sirene sabotasje"
+      },
+      "siren_battery": {
+        "name": "Sirene batteri"
+      },
+      "panel_tamper": {
+        "name": "Keypad sabotasje"
       }
     },
     "sensor": {

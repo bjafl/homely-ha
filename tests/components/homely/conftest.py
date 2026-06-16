@@ -103,8 +103,16 @@ def mock_config_entry_no_locations():
 
 
 def create_mock_device_features() -> MagicMock:
-    """Create a mock device features."""
+    """Create a mock device features (all optional features default to None)."""
     features = MagicMock(spec=DeviceFeatures)
+    features.alarm = None
+    features.temperature = None
+    features.battery = None
+    features.diagnostic = None
+    features.metering = None
+    features.thermostat = None
+    features.siren = None
+    features.panel = None
     return features
 
 
@@ -178,7 +186,7 @@ def create_mock_alarm_sensor_device(
     alarm_feature.states = create_alarm_states(
         default_state_value=state_value, default_updated=last_updated
     )
-    mock_features = MagicMock(spec=DeviceFeatures)
+    mock_features = create_mock_device_features()
     mock_features.alarm = alarm_feature
     return create_mock_device(
         name=device_name,

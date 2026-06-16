@@ -78,6 +78,18 @@
       },
       "device_online": {
         "name": "Connectivity"
+      },
+      "siren_acmains": {
+        "name": "Siren Mains Power"
+      },
+      "siren_tamper": {
+        "name": "Siren Tamper"
+      },
+      "siren_battery": {
+        "name": "Siren Battery"
+      },
+      "panel_tamper": {
+        "name": "Keypad Tamper"
       }
     },
     "sensor": {

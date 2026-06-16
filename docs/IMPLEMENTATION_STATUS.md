@@ -41,12 +41,13 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 | Robust deteksjon via `isAlarmDevice` | `isAlarmDevice` | ⬜ |
 | Alarmprofil/-reaksjon som diag-attr | `alarmProfile*`/`alarmReaction*` | ⬜ |
 
-## Device-features ikke fanget (Tabell 5) — ⬜
+## Device-features ikke fanget (Tabell 5) — 🚧
 | Tiltak | Feature.state | Status |
 |---|---|---|
-| Panikk/nødknapp | `armevent.emergencyevent` | ⬜ |
-| Sirene AC/batteri/tamper | `siren.{acmains,battery,tamper}` | ⬜ |
-| Keypad batteri/tamper | `panel.{battery,tamper}` | ⬜ |
+| Panikk/nødknapp | `armevent.emergencyevent` | ⬜ (utelatt nå) |
+| Sirene AC/batteri/tamper | `siren.{acmains,battery,tamper}` | ✅ (POWER/BATTERY/TAMPER) |
+| Keypad tamper | `panel.tamper` | ✅ (TAMPER) |
+| Keypad batteri | `panel.battery` | ⬜ (dekkes av `battery`-feature) |
 | Røykvarsler-batteri | `alarm.{low,batteryDefect}` | ⬜ |
 
 ## Hendelseslogg → HA (Tabell 2/3) — ⬜

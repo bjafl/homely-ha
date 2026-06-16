@@ -147,6 +147,16 @@ def create_binary_entities_from_device(
     if (metering := device.features.metering) is not None:
         if metering.states.check is not None:
             entities.append(HomelyEnergyCheckSensor(*sensor_args))
+    if (siren := device.features.siren) is not None:
+        if siren.states.acmains is not None:
+            entities.append(HomelySirenAcMainsSensor(*sensor_args))
+        if siren.states.tamper is not None:
+            entities.append(HomelySirenTamperSensor(*sensor_args))
+        if siren.states.battery is not None:
+            entities.append(HomelySirenBatterySensor(*sensor_args))
+    if (panel := device.features.panel) is not None:
+        if panel.states.tamper is not None:
+            entities.append(HomelyPanelTamperSensor(*sensor_args))
     return entities
 
 
@@ -432,6 +442,117 @@ class HomelyEnergyCheckSensor(HomelyBinarySensorBase):
         if not device or not device.features.metering:
             return None
         if (state := device.features.metering.states.check) is not None:
+            self.last_updated = state.last_updated
+        return state
+
+
+class HomelySirenAcMainsSensor(HomelyBinarySensorBase):
+    """Whether the siren is running on mains power."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        device: Device,
+    ) -> None:
+        """Initialize the siren AC mains sensor."""
+        super().__init__(coordinator, location_id, device)
+        self._attr_unique_id = f"{self.device_id}_siren_acmains"
+        self.has_entity_name = True
+        self._attr_translation_key = "siren_acmains"
+        self._attr_device_class = BinarySensorDeviceClass.POWER
+
+    def _get_current_sensor_state(self) -> SensorState[bool] | None:
+        """Get current sensor state from coordinator."""
+        device = self._get_current_device_state()
+        if not device or not device.features.siren:
+            return None
+        state = device.features.siren.states.acmains
+        if state is not None:
+            self.last_updated = state.last_updated
+        return state
+
+
+class HomelySirenTamperSensor(HomelyBinarySensorBase):
+    """Tamper state of the siren."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        device: Device,
+    ) -> None:
+        """Initialize the siren tamper sensor."""
+        super().__init__(coordinator, location_id, device)
+        self._attr_unique_id = f"{self.device_id}_siren_tamper"
+        self.has_entity_name = True
+        self._attr_translation_key = "siren_tamper"
+        self._attr_device_class = BinarySensorDeviceClass.TAMPER
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def _get_current_sensor_state(self) -> SensorState[bool] | None:
+        """Get current sensor state from coordinator."""
+        device = self._get_current_device_state()
+        if not device or not device.features.siren:
+            return None
+        state = device.features.siren.states.tamper
+        if state is not None:
+            self.last_updated = state.last_updated
+        return state
+
+
+class HomelySirenBatterySensor(HomelyBinarySensorBase):
+    """Low battery state of the siren."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        device: Device,
+    ) -> None:
+        """Initialize the siren battery sensor."""
+        super().__init__(coordinator, location_id, device)
+        self._attr_unique_id = f"{self.device_id}_siren_battery"
+        self.has_entity_name = True
+        self._attr_translation_key = "siren_battery"
+        self._attr_device_class = BinarySensorDeviceClass.BATTERY
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def _get_current_sensor_state(self) -> SensorState[bool] | None:
+        """Get current sensor state from coordinator."""
+        device = self._get_current_device_state()
+        if not device or not device.features.siren:
+            return None
+        state = device.features.siren.states.battery
+        if state is not None:
+            self.last_updated = state.last_updated
+        return state
+
+
+class HomelyPanelTamperSensor(HomelyBinarySensorBase):
+    """Tamper state of the keypad/panel."""
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        device: Device,
+    ) -> None:
+        """Initialize the panel tamper sensor."""
+        super().__init__(coordinator, location_id, device)
+        self._attr_unique_id = f"{self.device_id}_panel_tamper"
+        self.has_entity_name = True
+        self._attr_translation_key = "panel_tamper"
+        self._attr_device_class = BinarySensorDeviceClass.TAMPER
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def _get_current_sensor_state(self) -> SensorState[bool] | None:
+        """Get current sensor state from coordinator."""
+        device = self._get_current_device_state()
+        if not device or not device.features.panel:
+            return None
+        state = device.features.panel.states.tamper
+        if state is not None:
             self.last_updated = state.last_updated
         return state
 

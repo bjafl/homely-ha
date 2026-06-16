@@ -301,12 +301,30 @@ class SirenStates(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     alarm: SensorState[bool] | None = None
+    acmains: SensorState[bool] | None = None
+    battery: SensorState[bool] | None = None
+    tamper: SensorState[bool] | None = None
 
 
 class SirenFeature(BaseModel):
     """Siren feature container."""
 
     states: SirenStates
+
+
+class PanelStates(BaseModel):
+    """Collection of keypad/panel states."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tamper: SensorState[bool] | None = None
+    battery: SensorState[bool] | None = None
+
+
+class PanelFeature(BaseModel):
+    """Keypad/panel feature container."""
+
+    states: PanelStates
 
 
 class DeviceFeatures(BaseModel):
@@ -319,6 +337,7 @@ class DeviceFeatures(BaseModel):
     metering: MeteringFeature | None = None
     thermostat: ThermostatFeature | None = None
     siren: SirenFeature | None = None
+    panel: PanelFeature | None = None
 
 
 # Device Models
