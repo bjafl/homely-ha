@@ -74,7 +74,7 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 | `via_device` → gateway | (via `location_id`) | ✅ (allerede i `base_sensor`) |
 | manufacturer | serie-prefiks (`get_manufacturer`) | ✅ delvis — kan suppleres med `modelVendor` |
 | Online per enhet | `online` | ✅ (binary_sensor CONNECTIVITY per enhet) |
-| Robust deteksjon via `isAlarmDevice` | `isAlarmDevice` | ⬜ |
+| Robust deteksjon via `isAlarmDevice` + `sensorsConnectedDeviceType` | strukturert motion/entry, regex som fallback | ✅ |
 | Alarmprofil/-reaksjon som diag-attr | `alarmProfile*`/`alarmReaction*` | ⬜ |
 
 ## Device-features ikke fanget (Tabell 5) — 🚧

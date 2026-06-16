@@ -135,6 +135,8 @@ def create_mock_device(
     device.location = location
     device.serial_number = serial_number
     device.online = online
+    device.is_alarm_device = None
+    device.sensors_connected_device_type = None
     device.features = create_mock_device_features()
     for key, value in kwargs.items():
         setattr(device, key, value)

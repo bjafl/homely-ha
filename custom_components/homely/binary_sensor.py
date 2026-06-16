@@ -105,7 +105,6 @@ def pick_alarm_classes(device: Device) -> list[type[HomelyAlarmSensor]] | None:
     alarm = device.features.alarm
     if not alarm:
         return None
-    model_name = device.model_name.lower() if device.model_name else ""
     classes: list[type[HomelyAlarmSensor]] = []
     if alarm.states.fire is not None:
         classes.append(HomelySmokeSensor)
@@ -114,11 +113,31 @@ def pick_alarm_classes(device: Device) -> list[type[HomelyAlarmSensor]] | None:
     if alarm.states.tamper is not None:
         classes.append(HomelyTamperSensor)
     if alarm.states.alarm is not None:
-        if re.match(RE_MOTION_SENSOR, model_name):
-            classes.append(HomelyMotionSensor)
-        elif re.match(RE_ENTRY_SENSOR, model_name):
-            classes.append(HomelyEntrySensor)
+        if (motion_or_entry := _classify_motion_entry(device)) is not None:
+            classes.append(motion_or_entry)
     return classes
+
+
+def _classify_motion_entry(
+    device: Device,
+) -> type[HomelyMotionSensor | HomelyEntrySensor] | None:
+    """Classify an alarm device as motion vs entry.
+
+    Prefers the structured app-API fields (language-independent): an alarm
+    device with a ``sensorsConnectedDeviceType`` (DOOR/WINDOW/ENTRY_EXIT) is an
+    entry sensor, otherwise a motion sensor. Falls back to the model-name regex
+    when ``isAlarmDevice`` is not reported (e.g. legacy SDK API).
+    """
+    if device.is_alarm_device:
+        if device.sensors_connected_device_type:
+            return HomelyEntrySensor
+        return HomelyMotionSensor
+    model_name = device.model_name.lower() if device.model_name else ""
+    if re.match(RE_MOTION_SENSOR, model_name):
+        return HomelyMotionSensor
+    if re.match(RE_ENTRY_SENSOR, model_name):
+        return HomelyEntrySensor
+    return None
 
 
 def create_binary_entities_from_device(

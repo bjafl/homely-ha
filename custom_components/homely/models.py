@@ -372,6 +372,17 @@ class Device(BaseModel):
     gateway_id: Annotated[
         UUID | None, Field(alias="gatewayId", description="Gateway UUID")
     ] = None
+    is_alarm_device: Annotated[
+        bool | None,
+        Field(alias="isAlarmDevice", description="Whether the device is part of the alarm"),
+    ] = None
+    sensors_connected_device_type: Annotated[
+        str | None,
+        Field(
+            alias="sensorsConnectedDeviceType",
+            description="Door/window type for entry sensors; None for motion sensors",
+        ),
+    ] = None
     features: DeviceFeatures
 
 
