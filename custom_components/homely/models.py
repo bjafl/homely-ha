@@ -440,10 +440,15 @@ class Gateway(BaseModel):
 class HomeResponse(BaseModel):
     """Complete home state from Homely API."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     location_id: UUID
     name: str | None = None
     gateway_serial: str | None = None
     gateway: Gateway | None = None
+    remaining_pin_attempts: Annotated[
+        int | None, Field(alias="remainingPinAttempts")
+    ] = None
     alarm_state: Annotated[
         AlarmState | None,
         BeforeValidator(lambda v: v.upper() if isinstance(v, str) else v),

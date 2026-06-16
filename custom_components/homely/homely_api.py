@@ -307,6 +307,7 @@ class HomelyApi:
                 name=home_data["location"].get("name"),
                 gateway_serial=(gateway_data or {}).get("serialNumber"),
                 gateway=Gateway.model_validate(gateway_data) if gateway_data else None,
+                remaining_pin_attempts=home_data.get("remainingPinAttempts"),
                 alarm_state=alarm_state,
                 user_role=cached_location.role if cached_location else None,
                 devices=[Device.model_validate(d) for d in home_data.get("devices", [])],

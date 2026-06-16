@@ -70,6 +70,15 @@ async def async_setup_entry(
                 HomelyAlarmStateSensor(coordinator, location_id, home_state),
             )
         )
+        if getattr(home_state, "remaining_pin_attempts", None) is not None:
+            entities.append(
+                cast(
+                    HomelySensorBaseAny,
+                    HomelyRemainingPinAttemptsSensor(
+                        coordinator, location_id, home_state
+                    ),
+                )
+            )
 
         for device in home_state.devices:
             dev_entities = create_entities_from_device(coordinator, location_id, device)
@@ -653,3 +662,44 @@ class HomelyGatewayConnectionSensor(HomelyGatewaySensorBase):
             return None
         state = gw.features.connection.states.source
         return state.value if state else None
+
+
+class HomelyRemainingPinAttemptsSensor(
+    CoordinatorEntity[HomelyDataUpdateCoordinator], SensorEntity
+):
+    """Remaining alarm PIN attempts before the system locks out disarming."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        home_state: HomelyHomeState,
+    ) -> None:
+        """Initialize the remaining PIN attempts sensor."""
+        super().__init__(coordinator)
+        self._location_id = location_id
+        self._device_serial = home_state.gateway_serial
+        self._device_name = home_state.name
+        self._attr_unique_id = f"{location_id}_remaining_pin_attempts"
+        self._attr_translation_key = "remaining_pin_attempts"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:lock-alert"
+
+    @property
+    def device_info(self) -> dr.DeviceInfo:
+        """Attach to the gateway/alarm device."""
+        return dr.DeviceInfo(
+            identifiers={(DOMAIN, self._location_id)},
+            name=self._device_name,
+            model="Homely Alarm Gateway",
+            serial_number=self._device_serial,
+            manufacturer="Homely",
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the number of remaining PIN attempts."""
+        home = self.coordinator.get_home_state(self._location_id)
+        return home.remaining_pin_attempts if home else None

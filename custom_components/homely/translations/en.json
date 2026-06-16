@@ -110,6 +110,9 @@
       },
       "gateway_connection": {
         "name": "Connection"
+      },
+      "remaining_pin_attempts": {
+        "name": "Remaining PIN Attempts"
       }
     }
   }

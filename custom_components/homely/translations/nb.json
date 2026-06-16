@@ -110,6 +110,9 @@
       },
       "gateway_connection": {
         "name": "Tilkobling"
+      },
+      "remaining_pin_attempts": {
+        "name": "Gjenstående PIN-forsøk"
       }
     }
   }

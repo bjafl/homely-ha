@@ -54,7 +54,7 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 |---|---|---|
 | `event.homely_alarm_action` (arm/disarm + hvem) | WS `alarm-state-changed` + history-log | ⬜ |
 | `event.homely_zone_event` (entry/zone-faults) | `/gateways/{id}/history-log` | ⬜ |
-| `remainingPinAttempts`-sensor | `/home` | ⬜ |
+| `remainingPinAttempts`-sensor (diag, på alarm-enheten) | `/home` | ✅ |
 
 ## Oppfølging / polish
 | Tiltak | Status |
