@@ -49,3 +49,36 @@ class TestStructuredDetection:
         # isAlarmDevice False/None -> regex fallback (backwards compatible).
         dev = _alarm_device(is_alarm_device=None, sct=None, model_name="PIR Motion")
         assert pick_alarm_classes(dev) == [HomelyMotionSensor]
+
+
+class TestDeviceModelVendorAndType:
+    """API-reported manufacturer/connectivity type (2026-07 sniff)."""
+
+    def test_parses_model_vendor_and_device_type(self):
+        # Real device from the sniff: "Vaskeromsdør" entry sensor.
+        dev = Device.model_validate(
+            {
+                "id": "067721f1-f16a-41da-930b-05ae26eee802",
+                "name": "Vaskeromsdør",
+                "online": True,
+                "modelId": "9b765375-e3f4-4627-b73c-b4143ce86c2c",
+                "modelName": "Alarm Entry Sensor 2",
+                "modelVendor": "frient A/S",
+                "deviceType": "ZIGBEE",
+                "features": {"alarm": {"states": {"alarm": {"value": False}}}},
+            }
+        )
+        assert dev.model_vendor == "frient A/S"
+        assert dev.device_type == "ZIGBEE"
+
+    def test_missing_model_vendor_is_none(self):
+        dev = Device.model_validate(
+            {
+                "id": "067721f1-f16a-41da-930b-05ae26eee802",
+                "online": True,
+                "modelId": "9b765375-e3f4-4627-b73c-b4143ce86c2c",
+                "features": {"alarm": {"states": {"alarm": {"value": False}}}},
+            }
+        )
+        assert dev.model_vendor is None
+        assert dev.device_type is None

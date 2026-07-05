@@ -383,6 +383,14 @@ class Device(BaseModel):
             description="Door/window type for entry sensors; None for motion sensors",
         ),
     ] = None
+    model_vendor: Annotated[
+        str | None,
+        Field(alias="modelVendor", description="Manufacturer name reported by the API"),
+    ] = None
+    device_type: Annotated[
+        str | None,
+        Field(alias="deviceType", description="Connectivity type, e.g. ZIGBEE"),
+    ] = None
     features: DeviceFeatures
 
 
