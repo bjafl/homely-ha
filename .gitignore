@@ -75,3 +75,4 @@ test_credentials.json
 .local/
 .*cache/
 .claude/
+.worktrees/
