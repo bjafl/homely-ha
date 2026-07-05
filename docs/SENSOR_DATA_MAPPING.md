@@ -53,7 +53,7 @@ Ny `DeviceInfo`: `identifiers={(DOMAIN, gateway_id)}`, `manufacturer="Homely"`, 
 ### B2. Gateway-hendelseslogg → HA ⭐
 **To strømmer (som du beskrev):**
 
-**(a) Rik, markerbar:** `GET /gateways/{id}/history-log` (+ `PATCH` = marker lest, utenfor scope her).
+**(a) Rik, markerbar:** `GET /gateways/{id}/history-log` (+ `PATCH` = marker lest, utenfor scope her — se `API_GAP_ANALYSIS.md` del 4 for verifisert kvitteringsoppførsel: `acknowledge`/`acknowledgeAll`, delvis-feil når enhet fortsatt er i alarm).
 Event-typer fanget: `armedaway`, `armedstay`, `disarmed`, `entrytriggered`, `zonechanged`, `zoneflagclear`, `uplinkstate`.
 Felter: `id`, `status` (`unread`/`read`/`acknowledged`), `type`, `eventtime`, `receipt`/`receipttime` (ARC-kvittering), `requireAcknowledge`, og enten:
 - `user{id,userEmail,userRole,userName}` (arm/disarm) eller
@@ -83,12 +83,27 @@ Hentes allerede, ignoreres i dag:
 | `isAlarmDevice` | robust entitetsdeteksjon + diagnostisk attributt |
 | `online` (per enhet) | `binary_sensor` CONNECTIVITY per enhet |
 | `alarmProfileNight/Stay/Away` | diagnostiske attributter (hvilke profiler enheten inngår i) |
-| `alarmReactionNight/Stay/Away` (`NORMAL`/`ENTRY_EXIT`) | diagnostisk attributt (forklarer inngangsforsinkelse) |
+| `alarmReactionNight/Stay/Away` (`NORMAL`/`ENTRY_EXIT`/**`FOLLOWER`**) | diagnostisk attributt (forklarer inngangsforsinkelse). `FOLLOWER` er en tredje verdi oppdaget juli 2026 — betydning ikke bekreftet av data, antatt at enheten ikke selv utløser forsinkelse men følger en annen sone |
 | `features.alarm.{low,batteryDefect}` | røykvarsler-batteri (egne enheter mangler battery-feature, men rapporterer via alarm) |
 | `features.alarm.sensitivitylevel` | diagnostisk sensor |
 | **`features.armevent.emergencyevent`** (keypad) | ⭐ `binary_sensor` SAFETY / event — **panikk-/nødknapp** |
 | `features.panel.{battery,tamper}` (keypad) | keypad-batteri/tamper-sensorer |
 | `features.siren.{acmains,battery,tamper,conflevel}` | sirene: `acmains` → binary_sensor POWER, battery, tamper |
+
+### B3b. Alarmmodus-nedtelling og -lyd (`gateway.exitEntrySettings`) ⭐ nytt funn (juli 2026)
+**Kilde: `/home → gateway.exitEntrySettings` — hentes allerede, parses ikke.** Null nye API-kall. Verifisert ved live sniff av arm→trigger→disarm-syklus (`~/source/sniffs/homely_alarm_modes_redacted.json`).
+
+| Modus | `entryTime` | `entrySoundTime` | `exitTime` | `exitSoundTime` | `squawkLevel` |
+|---|---|---|---|---|---|
+| Away (borte) | 30s | 25-30s | **60s** | 30s | `MediumLevelSound` |
+| Night (natt) | **40s** | 30s | 20s | 0s | `LowLevelSound` |
+| Stay (delsikring) | 20s | 10-20s | 20s | 0-5s | `LowLevelSound` |
+
+Pluss globale sirenenivåer på samme objekt: `sirenLevelStayDelay`, `sirenLevelEntryExit`, `sirenLevelNightDelay`, `sirenLevelAlarm` (enum `Off`/`LowLevelSound`/`MediumLevelSound`/`HighLevelSound`/`VeryHighLevelSound`).
+
+**Dette bekrefter tidligere måling:** exit/entry-delay observert i praksis (~20s for STAY-modus, se `API_GAP_ANALYSIS.md` §5) matcher nøyaktig `alarmProfileStay.entryTime`/`exitTime` her — nedtellingen er altså en **fast, konfigurerbar verdi**, ikke noe API-et broadcaster live som sekunder-igjen. En HA-nedtellings-sensor må lese denne configen én gang og selv holde styr på `now - arm_request_time`.
+
+**Forslag:** diagnostiske attributter (eller egne `sensor`/`number`-entiteter hvis skriving ønskes senere) på alarm-panelet/gateway-enheten: `away_entry_time`, `away_exit_time`, `night_entry_time`, osv. Live-oppdatering mulig uten polling via WS-eventet `exit-entry-settings-changed` (se `API_GAP_ANALYSIS.md` §5) — sendes hver gang noen endrer config i appen.
 
 ### B4. `remainingPinAttempts` (location-nivå) ⭐
 **Kilde: `/home` top-nivå — hentes allerede.** → `sensor` (DIAGNOSTIC, antall PIN-forsøk igjen). Direkte nyttig: gir varsel før lockout, og forklarer disarm-feil i UI (jf. `code 2023, "Remaining attempts: N"`).
@@ -113,6 +128,7 @@ Hentes allerede, ignoreres i dag:
 - keypad: panikk (SAFETY), batteri, tamper
 - sirene: AC (POWER), batteri, tamper
 - location: `remainingPinAttempts` (DIAGNOSTIC)
+- alarm-panel/gateway: nedtellings-/lydkonfig per modus (DIAGNOSTIC-attributter fra `gateway.exitEntrySettings`)
 
 **Opprydding i eksisterende**
 - Legg `ARMED_STAY` til alarm-state-enum (fiks `ARMED_PARTLY`-bug)
@@ -128,6 +144,7 @@ Hentes allerede, ignoreres i dag:
 |---|---|---|
 | gateway.features (AC/batteri/firmware/connection) | i `/home` | **Nei** |
 | `remainingPinAttempts`, device-ekstrafelter, alarmprofiler | i `/home` | **Nei** |
+| Alarmmodus-nedtelling/-lyd (Away/Night/Stay) | `gateway.exitEntrySettings` i `/home` | **Nei** |
 | arm/disarm "av hvem" | WS `alarm-state-changed` | **Nei** (allerede tilkoblet) |
 | Rik hendelseslogg (zone-faults, ARC, etterfylling) | `/gateways/{id}/history-log` | Ja |
 | GSM/wifi-detaljer | `/gateways/{id}/networks` | Ja |

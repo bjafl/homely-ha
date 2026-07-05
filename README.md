@@ -10,6 +10,14 @@ Native Home Assistant integration for Homely alarm systems with real-time WebSoc
 
 ---
 
+## Disclaimer
+
+This is an **unofficial, community-developed** integration. It is **not affiliated with, endorsed by, or supported by Homely AS**. "Homely" is used solely to identify compatibility with their product.
+
+The integration talks to Homely's undocumented cloud API, reverse-engineered from the official mobile app's own network traffic for interoperability purposes, using your own account credentials. Homely may change or restrict this API at any time without notice, which could break this integration. Use at your own risk — see the [LICENSE](LICENSE) for the full "as is" terms. Bugs in this integration will not be supported by Homely.
+
+---
+
 ## Features
 
 ### Real-Time Updates

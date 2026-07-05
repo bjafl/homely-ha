@@ -11,6 +11,7 @@
 3. **15 REST-endepunkter** appen bruker kalles aldri av integrasjonen (rules-engine, scenes, device-groups, activity-logs, gateway-nettverk/wifi, ARC-abonnement, feature-historikk).
 4. **Siren- og AC-mains-tilstand** parses ikke → ingen "alarm utløst (sirene)"- eller "strømbrudd på sirene"-sensor.
 5. Rik **device-metadata** (rom-hierarki, adresse/GPS, alarmprofiler/-reaksjoner per enhet, `isAlarmDevice`, `deviceType`) ignoreres.
+6. **`gateway.exitEntrySettings`** (også i `/home`, null nytt kall) gir nedtellings- og lydkonfig **per alarmmodus** (Away/Night/Stay) — helt udokumentert og ubrukt før nå. Se §2 og §5.
 
 ---
 
@@ -32,12 +33,32 @@ Integrasjonen kaller kun: `oauth/v2/token`, `oauth/v2/refresh-token`, `/location
 | `GET /arc/membership/{id}/status` | ARC-status (Alarm Response Center / vekterabonnement) | Binær/diag-sensor: er proff-overvåkning aktiv |
 | `GET /locations/{id}/services` | Tilgjengelige tjenester for lokasjonen | Feature-gating |
 | `GET /dashboard` | (tomt `{}` her) | Sannsynligvis ubrukelig |
+| `GET /locations/{id}/users` + `PUT /locations/{id}/users/{userId}` (body `{"role": "OWNER"\|"ADMIN"\|"USER"}`) | Full medlemsliste for lokasjonen (id/e-post/navn/rolle) + rolleendring | Vis hvem som har tilgang og med hvilken rolle; forklarer disarm-PIN-forskjeller mellom kontoer (jf. `remainingPinAttempts`-saken) |
+| `GET /invitations/sent/{id}` | Utestående invitasjoner til lokasjonen | Diagnostikk (tomt array i fangsten — ingen ventende invitasjoner testet) |
+| `GET /guest-users?locationId=` | Gjestebrukere for lokasjonen | Tomt i fangsten, men **antyder en fjerde rolletype `GUEST`** utover OWNER/ADMIN/USER — ubekreftet innhold |
+| `POST /alarm/pin` (body `{"pin","locationId"}`) | Endre PIN-kode (separat fra `/alarm/disarm`) | Skriveoperasjon; broadcastes over WS som `alarm-pin-updated` med `userId` (PIN selv lekkes ikke over WS) |
+| `PATCH /gateways/{id}/exit-entry` (body `{"exitEntrySettings": {"alarmProfileAway\|Night\|Stay": {"entryTime","entrySoundTime","exitTime","exitSoundTime","squawkLevel"}}, "sirenLevelEntryExit"?, "sirenLevelAlarm"?}`) | Nedtellings-/lydkonfig **per alarmmodus** | Se §2/§5 — full config allerede lesbar via `/home → gateway.exitEntrySettings`, dette er kun skrivesiden |
+| `PATCH /devices/{id}/alarm-profile` (body `{"alarmProfileAway\|Night\|Stay": bool}`) | Enhets medlemskap i en alarmmodus | Speiler felt allerede lest fra `/home → devices[]` |
+| `PATCH /devices/{id}/alarm-reaction` (body `{"alarmReactionAway\|Night\|Stay": "NORMAL"\|"ENTRY_EXIT"\|"FOLLOWER"}`) | Enhets reaksjonstype per modus | **`FOLLOWER`** er en tredje verdi oppdaget her, utover kjente `NORMAL`/`ENTRY_EXIT` (betydning ikke bekreftet — antatt: sensoren utløser ikke egen forsinkelse, men følger en annen sones) |
 
 ---
 
 ## 2. Felter i `/home`-responsen som integrasjonen ignorerer
 
 Integrasjonen parser kun: `location.{id,name}`, `gateway.serialNumber`, `devices[]` (utvalgte felter), `alarmState`, `userRoleAtLocation`.
+
+### Gateway-nivå (kastes) ⭐ nytt funn
+**`gateway.exitEntrySettings`** — nedtellings- og lydkonfig **per alarmmodus**, verifisert juli 2026 (`~/source/sniffs/homely_alarm_modes_redacted.json`):
+
+| Modus | `entryTime` | `entrySoundTime` | `exitTime` | `exitSoundTime` | `squawkLevel` (observert default) |
+|---|---|---|---|---|---|
+| `alarmProfileAway` (borte) | 30s | 25-30s | **60s** | 30s | `MediumLevelSound` |
+| `alarmProfileNight` (natt) | **40s** | 30s | 20s | 0s | `LowLevelSound` |
+| `alarmProfileStay` (delsikring) | 20s | 10-20s | 20s | 0-5s | `LowLevelSound` |
+
+Pluss globale sirenenivåer på samme objekt: `sirenLevelStayDelay`, `sirenLevelEntryExit`, `sirenLevelNightDelay`, `sirenLevelAlarm` — alle enum `Off`/`LowLevelSound`/`MediumLevelSound`/`HighLevelSound`/`VeryHighLevelSound`.
+
+Dette **er** de faktiske tidsverdiene bak nedtellingen dokumentert i §5 (STAY-testen traff nøyaktig `entryTime`/`exitTime`=20 for `alarmProfileStay`). Ingen nytt kall — allerede i `/home`-responsen integrasjonen henter.
 
 ### Top-nivå (kastes)
 `heatingRules`, `arcServiceStatus`, `deviceGroups`, `scenes`, `rules`, **`remainingPinAttempts`**, `independentLivingRules`, `independentLivingServiceStateLogs`, `hasAmsAvailableDevices`
@@ -59,7 +80,7 @@ Integrasjonen parser kun: `location.{id,name}`, `gateway.serialNumber`, `devices
 
 - **`isAlarmDevice`** ⭐ — boolsk; ville gjort entitets-deteksjon robust i stedet for `modelName`-regex (`RE_MOTION_SENSOR`/`RE_ENTRY_SENSOR`).
 - **`deviceType`** (`ZIGBEE`) — naturlig diagnostikk-attributt.
-- **`alarmProfile*` / `alarmReaction*`** — per-enhet: hvilke profiler enheten inngår i, og reaksjonstype (`NORMAL` / `ENTRY_EXIT`). Forklarer inngangsforsinkelse.
+- **`alarmProfile*` / `alarmReaction*`** — per-enhet: hvilke profiler enheten inngår i, og reaksjonstype (`NORMAL` / `ENTRY_EXIT` / **`FOLLOWER`** — sistnevnte nytt funn, se §1). Forklarer inngangsforsinkelse.
 - **`modelVendor`** (`frient A/S`, `Fireangel`) — burde vært `manufacturer` i `DeviceInfo` (nå hardkodet "Homely").
 
 ---
@@ -87,13 +108,44 @@ Enhetstyper i dumpen: `Alarm Entry Sensor 2`, `Alarm Motion Sensor 2`, `Window S
 Integrasjonen skriver kun: `/alarm/arm`, `/alarm/disarm`. Appen viser at API-et også støtter:
 - **Regelmotor** (`/rule-engine/rules`) — opprette/endre tidsstyrt arming.
 - **Scener** (`/device-groups/scenes`).
-- **Gateway-historikk kvittering** (`PATCH /gateways/{id}/history-log`).
+- **Gateway-historikk kvittering** (`PATCH /gateways/{id}/history-log`) — verifisert (juli 2026), to body-varianter:
+  - `{"acknowledge": [eventId, ...]}` — kvitterer enkeltoppføringer, `200` med tom respons.
+  - `{"acknowledgeAll": true}` — kvitterer alle utestående. Kan returnere `400` med `{"code": 2097, "message": "Some log updates failed while acknowledging", "details": {"updateLogResults": [{"id", "success", "error"?}, ...]}}` selv om de fleste lyktes — appen må lese `updateLogResults` per-id, ikke bare HTTP-status. Observert feil: `{"code": 2095, "message": "device in alarm"}` — en oppføring kan **ikke** kvitteres mens enheten den gjelder fortsatt står i aktiv alarmtilstand.
+  - Loggoppføringer bærer `receipt`/`receipttime` som viser kvittering på to nivåer (`"Acknowledged by cloud; Acknowledged by ARC"`) — cloud- og ARC-kvittering er separate fra appens `acknowledge`-kall.
+  - **Rolleendring** (`PUT /locations/{id}/users/{userId}`, body `{"role": "..."}`) hører også hjemme her — se tabell i del 1.
+- **Alarmmodus-konfig** (`PATCH /gateways/{id}/exit-entry`, `PATCH /devices/{id}/alarm-profile`, `PATCH /devices/{id}/alarm-reaction`) — verifisert juli 2026, alle returnerer `200 null` uten valideringsfeil for noen av de testede kombinasjonene. Se tabell i del 1 og full nedtellingskonfig i §2.
+- **PIN-endring** (`POST /alarm/pin`) — separat fra disarm, se del 1.
 
 ---
 
 ## 5. WebSocket — delvis utnyttet
 
 Integrasjonen lytter på `device-state-changed` og `alarm-state-changed`. `alarm-state-changed` bærer `userId`, `userName`, `eventId`, `timestamp` — disse parses i modellen men **eksponeres ikke** (kunne blitt attributter: "sist endret av X"). `/alarm/state`-responsen har også et `timestamp` som ignoreres.
+
+**Inngangsforsinkelse og `BREACHED` — nå verifisert (ny sniff juli 2026, se `~/source/sniffs/homely_alarm_roles_redacted.json`).** Full sekvens observert ved arm→trigger→disarm (`ARMED_STAY`-profil):
+
+| Tid (relativt) | WS-event | `state`/felter |
+|---|---|---|
+| T+0.0s | `alarm-state-changed` (×5, samme payload resendt hvert ~5s) | `ARM_STAY_PENDING` |
+| T+19.9s | `alarm-state-changed` | `ARMED_STAY`, `userId`/`userName` |
+| — | `device-state-changed` (feature `alarm`, `value: true`) | sensor detekterer inntrenging |
+| **+20.0s etter deteksjon** | `alarm-state-changed` | **`BREACHED`**, `eventId`, `userName: ""` |
+| samtidig | **`device-alarm-triggered`** | `{"type": "BURGLARY", "deviceId", "locationId", "eventTime"}` — `eventTime` peker tilbake til faktisk deteksjonstidspunkt, ikke broadcast-tidspunktet |
+| ved disarm | `alarm-state-changed` | `DISARMED`, `userId`/`userName`, `deviceId` |
+| samtidig | **`device-alarm-restore`** | `{"type": "BURGLARY", "deviceId", "locationId"}` — nullstiller enhetens alarmtilstand |
+
+Konklusjoner for implementasjon:
+- **Ingen gjenstående-sekunder-felt finnes noe sted** — verken i `PENDING`-eventene eller REST (`/alarm/state`). Både exit-delay (arm→armed) og entry-delay (deteksjon→`BREACHED`) målt til **konsistent ~20 sekunder** i denne fangsten; en nedtellings-sensor i HA må beregnes klient-side (`now - arm_request_time` / `now - first_alarm_true_detection`) mot en antatt/konfigurert forsinkelse, ikke leses fra APIet.
+- `device-alarm-triggered`/`device-alarm-restore` er **separate, enhetsspesifikke** events (type `BURGLARY` sett her — andre `alarmTypes` fra enhetslisten, f.eks. brann/vann, gir trolig samme eventtype med annen `type`-verdi) — disse bør trolig drive en egen `event`-entitet eller attributt på enhetens alarm-`binary_sensor`, atskilt fra det location-brede `alarm-state-changed`.
+- `models.AlarmState`s regex-basert `_missing_`-fallback (`ALARM.*PENDING`) er nå bekreftet korrekt for `ARM_STAY_PENDING`; `BREACHED` bør legges til som eksplisitt enum-medlem siden payload-strukturen er verifisert.
+
+**Tre nye WS-eventtyper oppdaget** (juli 2026, ved endring av alarmmodus-config i appen — se `homely_alarm_modes_redacted.json`), ingen av dem lyttet på i dag:
+
+| Event | `eventData` | Notat |
+|---|---|---|
+| `exit-entry-settings-changed` | full `exitEntrySettings`-objekt (alle tre profiler + sirenenivåer, ikke bare det som endret seg) | Live-sync ved endring — kunne holdt en HA-konfig-sensor oppdatert uten polling |
+| `device-info-changed` | full snapshot av ett device sine `alarmProfile*`/`alarmReaction*`-flagg | Tilsvarende live-sync per enhet |
+| `alarm-pin-updated` | `{gatewayId, locationId, userId, userLocationId}` | Bekrefter hvem som endret PIN — bærer ikke selve PIN-en |
 
 ---
 
@@ -110,5 +162,6 @@ Integrasjonen lytter på `device-state-changed` og `alarm-state-changed`. `alarm
 | 7 | **`modelVendor` → riktig manufacturer** | `/home` device-felt | Triviell |
 | 8 | **Alarm-hendelseslogg → HA logbook** | `/alarm/activities/{id}` + WS `userName` | Middels |
 | 9 | **Rom-/sone-tilordning** | `location.children` + device `locationId` | Høy |
+| 10 | **Alarmmodus-nedtelling som diagnostikk-attributter** (entry/exit-tid + lydnivå per Away/Night/Stay) | `gateway.exitEntrySettings` (allerede i `/home`) | Lav — data finnes alt |
 
 > Merk: alle data over er fanget fra OWNER-kontoens egen trafikk. Felter kan variere mellom Homely-abonnement (ARC/AMS/independent-living ser ut til å være betalte tillegg).

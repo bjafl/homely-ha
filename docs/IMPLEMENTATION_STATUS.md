@@ -18,7 +18,7 @@
 
 **Datakilder (fanget app-API-trafikk):**
 - `~/source/sniffs/homely_sniffs.json` — ren, filtrert Homely-trafikk (REST + WS). Primær referanse.
-- `/tmp/capture.mitm` — full mitmproxy-dump (rik gateway-logg her).
+- `~/source/sniffs/capture.jsonl` — rå, ufiltrert capture (samme kilde, bredere). `/tmp/capture.mitm` (nevnt i tidligere versjon av dette dokumentet) finnes ikke lenger — `/tmp` er flyktig og ble ryddet.
 - Analyse: `API_GAP_ANALYSIS.md`, `docs/SENSOR_DATA_MAPPING.md` (datamapping + entitetstype-tabeller).
 
 **Etablerte mønstre (følg disse):**
@@ -35,9 +35,10 @@
 4. **#6 `event.homely_zone_event`** — zone-faults fra `GET /gateways/{id}/history-log` (nytt kall; rik logg med ac_mains_fault/battery_fault per sone).
 - Småting: røykvarsler-batteri via `alarm.{low,batteryDefect}`.
 - **Bevisst utelatt:** panikk/nødknapp (`armevent.emergencyevent`) — brukeren utsatte den.
+- **Bevisst utsatt (2026-07-05):** klient-side beregnet "entry-delay pending"-nedtelling. Verifisert at API-et **aldri** broadcaster et pending-signal mellom `ARMED_STAY` og `BREACHED` (verken WS eller REST-poll av `/alarm/state`) — inngangsforsinkelsen håndteres trolig lokalt på gateway/keypad. En utledet nedtelling er teknisk mulig (vi har `gateway.exitEntrySettings.entryTime` per modus + per-enhet `alarmProfile*`/`alarmReaction*`), men krever å korrekt tolke `alarmReaction* = FOLLOWER` sin semantikk, som er **gjettet fra navnet, ikke bekreftet** — feil tolkning gir en nedtelling som ikke stemmer med virkeligheten. Utsatt til `FOLLOWER`-oppførsel kan verifiseres (f.eks. en sniff med bevegelse under en aktiv inngangsforsinkelse). Se `docs/superpowers/plans/2026-07-05-alarm-state-mode-fixes.md` for kontekst.
 
 **Commits så langt på branchen (nyeste sist):**
-`3e3127e` alarm-robusthet+gateway · `f4af60c` docs · `4a8e9b9` gateway-tallsensorer+mixin · `d0d7288` remainingPinAttempts · `d1a4d6d` device-online · `03cd883` event-entitet · `3f81fb3` siren/keypad
+`3e3127e` alarm-robusthet+gateway · `f4af60c` docs · `4a8e9b9` gateway-tallsensorer+mixin · `d0d7288` remainingPinAttempts · `d1a4d6d` device-online · `03cd883` event-entitet · `3f81fb3` siren/keypad · `cb2195f` gateway-extras
 
 ---
 
@@ -45,8 +46,8 @@
 | Tiltak | Status | Hvor |
 |---|---|---|
 | `ARMED_STAY` (fiks `ARMED_PARTLY`-regresjon) | ✅ | models/alarm_control_panel/sensor |
-| `ARM_STAY_PENDING` → ARMING | ✅ | models + state-map |
-| `ALARM_STAY_PENDING` → PENDING | ✅ | state-map |
+| `ARM_STAY_PENDING` → ARMING | ✅ (verifisert i sniff) | models + state-map |
+| `ALARM_PENDING`/`ALARM_STAY_PENDING` → PENDING, `BREACHED` → TRIGGERED | ✅ **verifisert mot ekte trafikk** (ny sniff juli 2026, `~/source/sniffs/homely_alarm_roles_redacted.json`) — `BREACHED` bekreftet som eget `alarm-state-changed`-state, entry-delay målt til ~20s (samme som exit-delay). **Ingen gjenstående-sekunder-felt finnes i payloaden** — nedtelling må beregnes klient-side. Egne `device-alarm-triggered`/`device-alarm-restore`-events (type `BURGLARY`) kommer i tillegg til det location-brede `alarm-state-changed`, se `API_GAP_ANALYSIS.md` §5 — **ikke implementert ennå**, kun state-mapet for `BREACHED` trenger oppdatering. | state-map |
 | Tolerant state-parsing + regex-fallback + WARNING | ✅ | `models.AlarmState._missing_` |
 | Dedupe av duplikat state-map | ✅ | sensor importerer kanonisk map |
 
@@ -66,7 +67,7 @@ Kilde: `/home → gateway.features` (ingen nye kall). Tester: `tests/.../test_ga
 | Tilkoblingskilde | `connection.source` | sensor ENUM (diag) | ✅ |
 | Delt mixin `HomelyGatewayEntity` (base_sensor) | — | refaktor | ✅ |
 | Firmware (egen update-entitet) | `status.firmware*` | update-entitet | ⬜ (sw_version satt) |
-| GSM-signal/operatør | `/gateways/{id}/networks` | sensor ENUM (diag) — nytt kall | ⬜ |
+| GSM-signal/operatør | `/gateways/{id}/networks` | sensor ENUM (diag) — nytt kall | ✅ |
 
 ## Enhetsliste-felter (Tabell 4) — 🚧
 | Tiltak | Felt | Status |
