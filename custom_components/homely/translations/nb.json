@@ -147,6 +147,9 @@
     "event": {
       "alarm_action": {
         "name": "Alarmhandling"
+      },
+      "device_alarm": {
+        "name": "Alarmutløsning"
       }
     }
   }

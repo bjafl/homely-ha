@@ -724,3 +724,43 @@ class TestHomelyEnergyCheckSensor:
         assert state.last_updated == last_updated
         mock_get_device_valid_state.assert_called_once()
         assert sensor.is_on is state_value
+
+
+class TestHomelyDeviceOnlineSensorAlarmAttributes:
+    """Alarm-profile/-reaction diagnostic attributes (2026-07 sniff)."""
+
+    def test_exposes_profile_and_reaction_attributes(
+        self, mock_device, mock_coordinator_basic
+    ):
+        from custom_components.homely.models import AlarmReaction
+
+        sensor = HomelyDeviceOnlineSensor(
+            mock_coordinator_basic, TEST_LOCATION_ID, mock_device
+        )
+        device_state = MagicMock()
+        device_state.alarm_profile_away = True
+        device_state.alarm_profile_night = False
+        device_state.alarm_profile_stay = True
+        device_state.alarm_reaction_away = AlarmReaction.ENTRY_EXIT
+        device_state.alarm_reaction_night = AlarmReaction.NORMAL
+        device_state.alarm_reaction_stay = AlarmReaction.FOLLOWER
+        sensor._get_current_device_state = MagicMock(return_value=device_state)
+
+        attrs = sensor.extra_state_attributes
+
+        assert attrs["alarm_profile_away"] is True
+        assert attrs["alarm_profile_night"] is False
+        assert attrs["alarm_profile_stay"] is True
+        assert attrs["alarm_reaction_away"] == "ENTRY_EXIT"
+        assert attrs["alarm_reaction_night"] == "NORMAL"
+        assert attrs["alarm_reaction_stay"] == "FOLLOWER"
+
+    def test_no_device_state_omits_alarm_attrs(
+        self, mock_device, mock_coordinator_basic
+    ):
+        sensor = HomelyDeviceOnlineSensor(
+            mock_coordinator_basic, TEST_LOCATION_ID, mock_device
+        )
+        sensor._get_current_device_state = MagicMock(return_value=None)
+        attrs = sensor.extra_state_attributes
+        assert "alarm_profile_away" not in attrs

@@ -74,6 +74,25 @@ class AlarmState(str, Enum):
         return guess
 
 
+class AlarmReaction(str, Enum):
+    """How a device reacts within an alarm profile it belongs to."""
+
+    NORMAL = "NORMAL"
+    ENTRY_EXIT = "ENTRY_EXIT"
+    FOLLOWER = "FOLLOWER"
+    UNKNOWN = "UNKNOWN"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "AlarmReaction":
+        """Best-effort map an unrecognized reaction instead of raising."""
+        _LOGGER.warning(
+            "Unknown Homely alarm reaction %r — defaulting to UNKNOWN. "
+            "Please report so it can be handled explicitly.",
+            value,
+        )
+        return cls.UNKNOWN
+
+
 class UserRole(str, Enum):
     """User roles at a Homely location."""
 
@@ -383,6 +402,56 @@ class Device(BaseModel):
             description="Door/window type for entry sensors; None for motion sensors",
         ),
     ] = None
+    model_vendor: Annotated[
+        str | None,
+        Field(alias="modelVendor", description="Manufacturer name reported by the API"),
+    ] = None
+    device_type: Annotated[
+        str | None,
+        Field(alias="deviceType", description="Connectivity type, e.g. ZIGBEE"),
+    ] = None
+    alarm_profile_away: Annotated[
+        bool | None,
+        Field(
+            alias="alarmProfileAway",
+            description="Whether this device is armed in Away mode",
+        ),
+    ] = None
+    alarm_profile_night: Annotated[
+        bool | None,
+        Field(
+            alias="alarmProfileNight",
+            description="Whether this device is armed in Night mode",
+        ),
+    ] = None
+    alarm_profile_stay: Annotated[
+        bool | None,
+        Field(
+            alias="alarmProfileStay",
+            description="Whether this device is armed in Stay mode",
+        ),
+    ] = None
+    alarm_reaction_away: Annotated[
+        AlarmReaction | None,
+        Field(
+            alias="alarmReactionAway",
+            description="Reaction type for this device in Away mode",
+        ),
+    ] = None
+    alarm_reaction_night: Annotated[
+        AlarmReaction | None,
+        Field(
+            alias="alarmReactionNight",
+            description="Reaction type for this device in Night mode",
+        ),
+    ] = None
+    alarm_reaction_stay: Annotated[
+        AlarmReaction | None,
+        Field(
+            alias="alarmReactionStay",
+            description="Reaction type for this device in Stay mode",
+        ),
+    ] = None
     features: DeviceFeatures
 
 
@@ -454,6 +523,44 @@ class GatewayFeatures(BaseModel):
     status: GatewayStatusFeature | None = None
 
 
+class ExitEntryProfileSettings(BaseModel):
+    """Countdown + arming-sound config for one alarm profile (Away/Night/Stay)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    entry_time: Annotated[int | None, Field(alias="entryTime")] = None
+    entry_sound_time: Annotated[int | None, Field(alias="entrySoundTime")] = None
+    exit_time: Annotated[int | None, Field(alias="exitTime")] = None
+    exit_sound_time: Annotated[int | None, Field(alias="exitSoundTime")] = None
+    squawk_level: Annotated[str | None, Field(alias="squawkLevel")] = None
+
+
+class ExitEntrySettings(BaseModel):
+    """Per-mode countdown/sound config + siren levels (`gateway.exitEntrySettings`)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    alarm_profile_away: Annotated[
+        ExitEntryProfileSettings | None, Field(alias="alarmProfileAway")
+    ] = None
+    alarm_profile_night: Annotated[
+        ExitEntryProfileSettings | None, Field(alias="alarmProfileNight")
+    ] = None
+    alarm_profile_stay: Annotated[
+        ExitEntryProfileSettings | None, Field(alias="alarmProfileStay")
+    ] = None
+    siren_level_stay_delay: Annotated[
+        str | None, Field(alias="sirenLevelStayDelay")
+    ] = None
+    siren_level_entry_exit: Annotated[
+        str | None, Field(alias="sirenLevelEntryExit")
+    ] = None
+    siren_level_night_delay: Annotated[
+        str | None, Field(alias="sirenLevelNightDelay")
+    ] = None
+    siren_level_alarm: Annotated[str | None, Field(alias="sirenLevelAlarm")] = None
+
+
 class Gateway(BaseModel):
     """Homely gateway (hjemmesentral) with telemetry features."""
 
@@ -464,6 +571,9 @@ class Gateway(BaseModel):
     model_id: Annotated[UUID | None, Field(alias="modelId")] = None
     online: bool = True
     features: GatewayFeatures | None = None
+    exit_entry_settings: Annotated[
+        ExitEntrySettings | None, Field(alias="exitEntrySettings")
+    ] = None
 
 
 # Gateway extras — fetched on a slow cadence (networks + history log)
@@ -615,6 +725,8 @@ class WsEventType(str, Enum):
 
     DEVICE_STATE_CHANGED = "device-state-changed"
     ALARM_STATE_CHANGED = "alarm-state-changed"
+    DEVICE_ALARM_TRIGGERED = "device-alarm-triggered"
+    DEVICE_ALARM_RESTORE = "device-alarm-restore"
 
 
 class AlarmStateName(str, Enum):
@@ -724,6 +836,17 @@ class WsAlarmChangeData(BaseModel):
     event_id: Annotated[int | str | None, Field(alias="eventId")] = None
 
 
+class WsDeviceAlarmData(BaseModel):
+    """WebSocket per-device alarm trigger/restore event data."""
+
+    model_config = ConfigDict(extra="allow")
+
+    alarm_type: Annotated[str, Field(alias="type")]
+    device_id: Annotated[UUID, Field(alias="deviceId")]
+    location_id: Annotated[UUID, Field(alias="locationId")]
+    event_time: Annotated[datetime | None, Field(alias="eventTime")] = None
+
+
 # TODO: unsure about the exact model here...
 class WsEventUnknown(BaseModel):
     """Unknown WebSocket event type."""
@@ -752,5 +875,31 @@ class WsAlarmChangeEvent(BaseModel):
     data: WsAlarmChangeData
 
 
-type WsEvent = WsDeviceChangeEvent | WsAlarmChangeEvent | WsEventUnknown
+class WsDeviceAlarmTriggeredEvent(BaseModel):
+    """WebSocket per-device alarm trigger event (e.g. BURGLARY)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal[WsEventType.DEVICE_ALARM_TRIGGERED] = (
+        WsEventType.DEVICE_ALARM_TRIGGERED
+    )
+    data: WsDeviceAlarmData
+
+
+class WsDeviceAlarmRestoreEvent(BaseModel):
+    """WebSocket per-device alarm restore event (condition cleared)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal[WsEventType.DEVICE_ALARM_RESTORE] = WsEventType.DEVICE_ALARM_RESTORE
+    data: WsDeviceAlarmData
+
+
+type WsEvent = (
+    WsDeviceChangeEvent
+    | WsAlarmChangeEvent
+    | WsDeviceAlarmTriggeredEvent
+    | WsDeviceAlarmRestoreEvent
+    | WsEventUnknown
+)
 WsEventAdapter: TypeAdapter[WsEvent] = TypeAdapter(WsEvent)

@@ -147,6 +147,9 @@
     "event": {
       "alarm_action": {
         "name": "Alarm Action"
+      },
+      "device_alarm": {
+        "name": "Alarm Trigger"
       }
     }
   }

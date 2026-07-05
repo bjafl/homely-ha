@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .coordinator import HomelyDataUpdateCoordinator
 from .const import DOMAIN
 from .homely_api import HomelyHomeState
-from .models import AlarmState
+from .models import AlarmState, Device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ _STATE_TO_EVENT: dict[AlarmState, str] = {
     AlarmState.ARMED_NIGHT: "armed_night",
     AlarmState.ARMED_STAY: "armed_home",
     AlarmState.ARMED_PARTLY: "armed_home",
+    AlarmState.BREACHED: "triggered",
 }
 
 
@@ -38,11 +39,21 @@ async def async_setup_entry(
     coordinator: HomelyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
     if not coordinator.selected_location_ids:
         return
-    entities = [
+    entities: list[HomelyAlarmEventEntity | HomelyDeviceAlarmEventEntity] = [
         HomelyAlarmEventEntity(coordinator, location_id, home_state)
         for location_id, home_state in coordinator.data.items()
         if location_id in coordinator.selected_location_ids
     ]
+    for location_id, home_state in coordinator.data.items():
+        if location_id not in coordinator.selected_location_ids:
+            continue
+        for device in home_state.devices:
+            if device.features.alarm is not None:
+                entities.append(
+                    HomelyDeviceAlarmEventEntity(
+                        coordinator, location_id, device, home_state
+                    )
+                )
     async_add_entities(entities)
 
 
@@ -53,7 +64,13 @@ class HomelyAlarmEventEntity(
 
     _attr_has_entity_name = True
     _attr_translation_key = "alarm_action"
-    _attr_event_types = ["disarmed", "armed_away", "armed_night", "armed_home"]
+    _attr_event_types = [
+        "disarmed",
+        "armed_away",
+        "armed_night",
+        "armed_home",
+        "triggered",
+    ]
     _attr_icon = "mdi:shield-account"
 
     def __init__(
@@ -115,3 +132,61 @@ class HomelyAlarmEventEntity(
             },
         )
         self.async_write_ha_state()
+
+
+class HomelyDeviceAlarmEventEntity(
+    CoordinatorEntity[HomelyDataUpdateCoordinator], EventEntity
+):
+    """Fires per-device alarm trigger/restore events (e.g. BURGLARY) from the WS."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "device_alarm"
+    _attr_event_types = ["triggered", "restored"]
+    _attr_icon = "mdi:shield-alert"
+
+    def __init__(
+        self,
+        coordinator: HomelyDataUpdateCoordinator,
+        location_id: str,
+        device: Device,
+        home_state: HomelyHomeState,
+    ) -> None:
+        """Initialize the per-device alarm trigger event entity."""
+        super().__init__(coordinator)
+        self._location_id = location_id
+        self._device_id = str(device.id)
+        self._attr_unique_id = f"{self._device_id}_alarm_trigger"
+        # Don't replay events that already happened before this entity existed.
+        self._last_triggered_seq = home_state.last_device_alarm_triggered_seq
+        self._last_restored_seq = home_state.last_device_alarm_restored_seq
+
+    @property
+    def device_info(self) -> dr.DeviceInfo:
+        """Attach to the existing device entity (not the gateway/panel)."""
+        return dr.DeviceInfo(identifiers={(DOMAIN, self._device_id)})
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Fire a triggered/restored event when a new WS event targets this device."""
+        home = self.coordinator.get_home_state(self._location_id)
+        if home is None:
+            return
+        triggered = home.last_device_alarm_triggered
+        if (
+            triggered is not None
+            and str(triggered.device_id) == self._device_id
+            and home.last_device_alarm_triggered_seq != self._last_triggered_seq
+        ):
+            self._last_triggered_seq = home.last_device_alarm_triggered_seq
+            self._trigger_event("triggered", {"alarm_type": triggered.alarm_type})
+            self.async_write_ha_state()
+            return
+        restored = home.last_device_alarm_restored
+        if (
+            restored is not None
+            and str(restored.device_id) == self._device_id
+            and home.last_device_alarm_restored_seq != self._last_restored_seq
+        ):
+            self._last_restored_seq = home.last_device_alarm_restored_seq
+            self._trigger_event("restored", {"alarm_type": restored.alarm_type})
+            self.async_write_ha_state()
