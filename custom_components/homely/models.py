@@ -411,22 +411,46 @@ class Device(BaseModel):
         Field(alias="deviceType", description="Connectivity type, e.g. ZIGBEE"),
     ] = None
     alarm_profile_away: Annotated[
-        bool | None, Field(alias="alarmProfileAway")
+        bool | None,
+        Field(
+            alias="alarmProfileAway",
+            description="Whether this device is armed in Away mode",
+        ),
     ] = None
     alarm_profile_night: Annotated[
-        bool | None, Field(alias="alarmProfileNight")
+        bool | None,
+        Field(
+            alias="alarmProfileNight",
+            description="Whether this device is armed in Night mode",
+        ),
     ] = None
     alarm_profile_stay: Annotated[
-        bool | None, Field(alias="alarmProfileStay")
+        bool | None,
+        Field(
+            alias="alarmProfileStay",
+            description="Whether this device is armed in Stay mode",
+        ),
     ] = None
     alarm_reaction_away: Annotated[
-        AlarmReaction | None, Field(alias="alarmReactionAway")
+        AlarmReaction | None,
+        Field(
+            alias="alarmReactionAway",
+            description="Reaction type for this device in Away mode",
+        ),
     ] = None
     alarm_reaction_night: Annotated[
-        AlarmReaction | None, Field(alias="alarmReactionNight")
+        AlarmReaction | None,
+        Field(
+            alias="alarmReactionNight",
+            description="Reaction type for this device in Night mode",
+        ),
     ] = None
     alarm_reaction_stay: Annotated[
-        AlarmReaction | None, Field(alias="alarmReactionStay")
+        AlarmReaction | None,
+        Field(
+            alias="alarmReactionStay",
+            description="Reaction type for this device in Stay mode",
+        ),
     ] = None
     features: DeviceFeatures
 

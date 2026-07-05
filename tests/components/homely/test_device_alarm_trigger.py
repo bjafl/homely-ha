@@ -65,6 +65,26 @@ class TestHomeStateStoresDeviceAlarmEvents:
             home._process_ws_device_alarm_triggered(wrong)
 
 
+def test_raw_device_alarm_triggered_frame_parses_end_to_end():
+    """The real captured raw WS frame must route through WsEventAdapter to
+    WsDeviceAlarmTriggeredEvent, not fall through as WsEventUnknown."""
+    from custom_components.homely.homely_api import HomelyWebSocketClient
+
+    client = HomelyWebSocketClient(api=MagicMock(), location_id=LOCATION_ID)
+    raw_frame = (
+        '422197260["message",{"type":"device-alarm-triggered","eventData":'
+        '{"type":"BURGLARY","deviceId":"8a70e463-5f3d-445f-9ab3-5fbd25318c0b",'
+        '"locationId":"f32bf453-23f9-4986-9a0c-195a06c99961",'
+        '"eventTime":"2026-07-05T16:54:56.733Z"}}]'
+    )
+    _, ev = client._parse_sio_packet(raw_frame)
+    home = _home_state()
+    home.update_state(ev)
+    assert home.last_device_alarm_triggered.alarm_type == "BURGLARY"
+    assert str(home.last_device_alarm_triggered.device_id) == DEVICE_ID
+    assert home.last_device_alarm_triggered_seq == 1
+
+
 def _coordinator(home):
     c = MagicMock()
     c.get_home_state = MagicMock(return_value=home)

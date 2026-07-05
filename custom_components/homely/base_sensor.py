@@ -31,6 +31,8 @@ type HomelySensorBaseAny = (
 
 def get_manufacturer(device: Device) -> str:
     """Get the manufacturer for a Homely device."""
+    # Truthiness check is deliberate: an empty-string model_vendor from the
+    # API is treated as "no vendor reported", falling through to heuristics.
     if device.model_vendor:
         return device.model_vendor
     SERIAL_MATCH = {

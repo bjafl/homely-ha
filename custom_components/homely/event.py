@@ -48,7 +48,7 @@ async def async_setup_entry(
         if location_id not in coordinator.selected_location_ids:
             continue
         for device in home_state.devices:
-            if device.is_alarm_device:
+            if device.features.alarm is not None:
                 entities.append(
                     HomelyDeviceAlarmEventEntity(
                         coordinator, location_id, device, home_state
@@ -64,7 +64,13 @@ class HomelyAlarmEventEntity(
 
     _attr_has_entity_name = True
     _attr_translation_key = "alarm_action"
-    _attr_event_types = ["disarmed", "armed_away", "armed_night", "armed_home", "triggered"]
+    _attr_event_types = [
+        "disarmed",
+        "armed_away",
+        "armed_night",
+        "armed_home",
+        "triggered",
+    ]
     _attr_icon = "mdi:shield-account"
 
     def __init__(
