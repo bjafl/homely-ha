@@ -111,6 +111,34 @@ class HomelyAlarmControlPanel(
             _LOGGER.warning("Unknown Homely alarm state: %s", home_state.alarm_state)
         return ha_state
 
+    @property
+    def extra_state_attributes(self) -> dict[str, int | str | None] | None:
+        """Expose configured entry/exit delay + sound levels per alarm mode."""
+        home_state = self.coordinator.get_home_state(self._location_id)
+        settings = (
+            home_state.gateway.exit_entry_settings
+            if home_state and home_state.gateway
+            else None
+        )
+        if settings is None:
+            return None
+        attrs: dict[str, int | str | None] = {}
+        for mode, profile in (
+            ("away", settings.alarm_profile_away),
+            ("night", settings.alarm_profile_night),
+            ("stay", settings.alarm_profile_stay),
+        ):
+            if profile is None:
+                continue
+            attrs[f"{mode}_entry_time"] = profile.entry_time
+            attrs[f"{mode}_exit_time"] = profile.exit_time
+            attrs[f"{mode}_entry_sound_time"] = profile.entry_sound_time
+            attrs[f"{mode}_exit_sound_time"] = profile.exit_sound_time
+            attrs[f"{mode}_squawk_level"] = profile.squawk_level
+        attrs["siren_level_entry_exit"] = settings.siren_level_entry_exit
+        attrs["siren_level_alarm"] = settings.siren_level_alarm
+        return attrs
+
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Disarm the alarm. Requires the Homely PIN as code."""
         if not code:

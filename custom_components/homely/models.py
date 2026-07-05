@@ -499,6 +499,44 @@ class GatewayFeatures(BaseModel):
     status: GatewayStatusFeature | None = None
 
 
+class ExitEntryProfileSettings(BaseModel):
+    """Countdown + arming-sound config for one alarm profile (Away/Night/Stay)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    entry_time: Annotated[int | None, Field(alias="entryTime")] = None
+    entry_sound_time: Annotated[int | None, Field(alias="entrySoundTime")] = None
+    exit_time: Annotated[int | None, Field(alias="exitTime")] = None
+    exit_sound_time: Annotated[int | None, Field(alias="exitSoundTime")] = None
+    squawk_level: Annotated[str | None, Field(alias="squawkLevel")] = None
+
+
+class ExitEntrySettings(BaseModel):
+    """Per-mode countdown/sound config + siren levels (`gateway.exitEntrySettings`)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    alarm_profile_away: Annotated[
+        ExitEntryProfileSettings | None, Field(alias="alarmProfileAway")
+    ] = None
+    alarm_profile_night: Annotated[
+        ExitEntryProfileSettings | None, Field(alias="alarmProfileNight")
+    ] = None
+    alarm_profile_stay: Annotated[
+        ExitEntryProfileSettings | None, Field(alias="alarmProfileStay")
+    ] = None
+    siren_level_stay_delay: Annotated[
+        str | None, Field(alias="sirenLevelStayDelay")
+    ] = None
+    siren_level_entry_exit: Annotated[
+        str | None, Field(alias="sirenLevelEntryExit")
+    ] = None
+    siren_level_night_delay: Annotated[
+        str | None, Field(alias="sirenLevelNightDelay")
+    ] = None
+    siren_level_alarm: Annotated[str | None, Field(alias="sirenLevelAlarm")] = None
+
+
 class Gateway(BaseModel):
     """Homely gateway (hjemmesentral) with telemetry features."""
 
@@ -509,6 +547,9 @@ class Gateway(BaseModel):
     model_id: Annotated[UUID | None, Field(alias="modelId")] = None
     online: bool = True
     features: GatewayFeatures | None = None
+    exit_entry_settings: Annotated[
+        ExitEntrySettings | None, Field(alias="exitEntrySettings")
+    ] = None
 
 
 # Gateway extras — fetched on a slow cadence (networks + history log)
