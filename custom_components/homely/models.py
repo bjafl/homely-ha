@@ -74,6 +74,25 @@ class AlarmState(str, Enum):
         return guess
 
 
+class AlarmReaction(str, Enum):
+    """How a device reacts within an alarm profile it belongs to."""
+
+    NORMAL = "NORMAL"
+    ENTRY_EXIT = "ENTRY_EXIT"
+    FOLLOWER = "FOLLOWER"
+    UNKNOWN = "UNKNOWN"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "AlarmReaction":
+        """Best-effort map an unrecognized reaction instead of raising."""
+        _LOGGER.warning(
+            "Unknown Homely alarm reaction %r — defaulting to UNKNOWN. "
+            "Please report so it can be handled explicitly.",
+            value,
+        )
+        return cls.UNKNOWN
+
+
 class UserRole(str, Enum):
     """User roles at a Homely location."""
 
@@ -390,6 +409,24 @@ class Device(BaseModel):
     device_type: Annotated[
         str | None,
         Field(alias="deviceType", description="Connectivity type, e.g. ZIGBEE"),
+    ] = None
+    alarm_profile_away: Annotated[
+        bool | None, Field(alias="alarmProfileAway")
+    ] = None
+    alarm_profile_night: Annotated[
+        bool | None, Field(alias="alarmProfileNight")
+    ] = None
+    alarm_profile_stay: Annotated[
+        bool | None, Field(alias="alarmProfileStay")
+    ] = None
+    alarm_reaction_away: Annotated[
+        AlarmReaction | None, Field(alias="alarmReactionAway")
+    ] = None
+    alarm_reaction_night: Annotated[
+        AlarmReaction | None, Field(alias="alarmReactionNight")
+    ] = None
+    alarm_reaction_stay: Annotated[
+        AlarmReaction | None, Field(alias="alarmReactionStay")
     ] = None
     features: DeviceFeatures
 

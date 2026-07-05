@@ -10,7 +10,7 @@ from custom_components.homely.binary_sensor import (
     HomelyMotionSensor,
     pick_alarm_classes,
 )
-from custom_components.homely.models import Device
+from custom_components.homely.models import AlarmReaction, Device
 
 
 def _alarm_device(is_alarm_device=True, sct=None, model_name=""):
@@ -82,3 +82,62 @@ class TestDeviceModelVendorAndType:
         )
         assert dev.model_vendor is None
         assert dev.device_type is None
+
+
+class TestAlarmProfileAndReactionFields:
+    """Per-mode alarm-profile membership + reaction type (2026-07 sniff).
+
+    FOLLOWER is a real reaction value confirmed live via
+    PATCH /devices/{id}/alarm-reaction {"alarmReactionStay": "FOLLOWER"}.
+    """
+
+    def test_parses_profile_and_reaction_fields(self):
+        dev = Device.model_validate(
+            {
+                "id": "067721f1-f16a-41da-930b-05ae26eee802",
+                "name": "Vaskeromsdør",
+                "online": True,
+                "modelId": "9b765375-e3f4-4627-b73c-b4143ce86c2c",
+                "alarmProfileAway": True,
+                "alarmProfileNight": True,
+                "alarmProfileStay": True,
+                "alarmReactionAway": "ENTRY_EXIT",
+                "alarmReactionNight": "NORMAL",
+                "alarmReactionStay": "ENTRY_EXIT",
+                "features": {"alarm": {"states": {"alarm": {"value": False}}}},
+            }
+        )
+        assert dev.alarm_profile_away is True
+        assert dev.alarm_profile_night is True
+        assert dev.alarm_profile_stay is True
+        assert dev.alarm_reaction_away is AlarmReaction.ENTRY_EXIT
+        assert dev.alarm_reaction_night is AlarmReaction.NORMAL
+        assert dev.alarm_reaction_stay is AlarmReaction.ENTRY_EXIT
+
+    def test_follower_reaction_value_parses(self):
+        dev = Device.model_validate(
+            {
+                "id": "067721f1-f16a-41da-930b-05ae26eee802",
+                "online": True,
+                "modelId": "9b765375-e3f4-4627-b73c-b4143ce86c2c",
+                "alarmReactionStay": "FOLLOWER",
+                "features": {"alarm": {"states": {"alarm": {"value": False}}}},
+            }
+        )
+        assert dev.alarm_reaction_stay is AlarmReaction.FOLLOWER
+
+    def test_unknown_reaction_value_does_not_raise(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            dev = Device.model_validate(
+                {
+                    "id": "067721f1-f16a-41da-930b-05ae26eee802",
+                    "online": True,
+                    "modelId": "9b765375-e3f4-4627-b73c-b4143ce86c2c",
+                    "alarmReactionAway": "SOMETHING_NEW",
+                    "features": {"alarm": {"states": {"alarm": {"value": False}}}},
+                }
+            )
+        assert dev.alarm_reaction_away is AlarmReaction.UNKNOWN
+        assert "SOMETHING_NEW" in caplog.text
