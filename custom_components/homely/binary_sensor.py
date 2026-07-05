@@ -599,6 +599,28 @@ class HomelyDeviceOnlineSensor(HomelyBinarySensorBase):
         device = self._get_current_device_state()
         return bool(device.online) if device else None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, bool | str | None]:
+        """Expose alarm-profile membership and per-mode reaction type."""
+        existing_attrs = super().extra_state_attributes or {}
+        attrs: dict[str, bool | str | None] = dict(existing_attrs)
+        device = self._get_current_device_state()
+        if device is None:
+            return attrs
+        attrs["alarm_profile_away"] = device.alarm_profile_away
+        attrs["alarm_profile_night"] = device.alarm_profile_night
+        attrs["alarm_profile_stay"] = device.alarm_profile_stay
+        attrs["alarm_reaction_away"] = (
+            device.alarm_reaction_away.value if device.alarm_reaction_away else None
+        )
+        attrs["alarm_reaction_night"] = (
+            device.alarm_reaction_night.value if device.alarm_reaction_night else None
+        )
+        attrs["alarm_reaction_stay"] = (
+            device.alarm_reaction_stay.value if device.alarm_reaction_stay else None
+        )
+        return attrs
+
 
 class HomelyGatewayBinarySensorBase(HomelyGatewayEntity, BinarySensorEntity):
     """Base for binary sensors on the Homely gateway (hjemmesentral) device."""
