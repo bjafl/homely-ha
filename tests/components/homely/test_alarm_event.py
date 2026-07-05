@@ -94,3 +94,14 @@ class TestAlarmEventEntity:
         ent = self._entity(home)
         ent._handle_coordinator_update()
         ent._trigger_event.assert_not_called()
+
+    def test_breached_fires_triggered_event(self):
+        home = _home_state()
+        ent = self._entity(home)
+        # Real captured payload has userName: "" on BREACHED (see homely_alarm_roles_redacted.json)
+        home.last_alarm_event = _alarm_event("BREACHED", user_name="")
+        ent._handle_coordinator_update()
+        ent._trigger_event.assert_called_once()
+        event_type, attrs = ent._trigger_event.call_args[0]
+        assert event_type == "triggered"
+        assert attrs["state"] == "BREACHED"

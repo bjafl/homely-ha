@@ -26,6 +26,7 @@ _STATE_TO_EVENT: dict[AlarmState, str] = {
     AlarmState.ARMED_NIGHT: "armed_night",
     AlarmState.ARMED_STAY: "armed_home",
     AlarmState.ARMED_PARTLY: "armed_home",
+    AlarmState.BREACHED: "triggered",
 }
 
 
@@ -53,7 +54,7 @@ class HomelyAlarmEventEntity(
 
     _attr_has_entity_name = True
     _attr_translation_key = "alarm_action"
-    _attr_event_types = ["disarmed", "armed_away", "armed_night", "armed_home"]
+    _attr_event_types = ["disarmed", "armed_away", "armed_night", "armed_home", "triggered"]
     _attr_icon = "mdi:shield-account"
 
     def __init__(
