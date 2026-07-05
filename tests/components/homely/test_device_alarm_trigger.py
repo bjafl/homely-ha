@@ -4,6 +4,8 @@ Grounded in real captured traffic (2026-07-05, BURGLARY on an entry sensor):
 see ~/source/sniffs/homely_alarm_roles_redacted.json.
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from custom_components.homely.exceptions import HomelyStateUpdateLocationMismatchError
@@ -61,3 +63,58 @@ class TestHomeStateStoresDeviceAlarmEvents:
         wrong = _triggered(location_id="00000000-0000-0000-0000-000000000000")
         with pytest.raises(HomelyStateUpdateLocationMismatchError):
             home._process_ws_device_alarm_triggered(wrong)
+
+
+def _coordinator(home):
+    c = MagicMock()
+    c.get_home_state = MagicMock(return_value=home)
+    return c
+
+
+class TestDeviceAlarmEventEntity:
+    def _entity(self, home):
+        from custom_components.homely.event import HomelyDeviceAlarmEventEntity
+
+        device = MagicMock()
+        device.id = DEVICE_ID
+        ent = HomelyDeviceAlarmEventEntity(
+            _coordinator(home), LOCATION_ID, device, home
+        )
+        ent._trigger_event = MagicMock()
+        ent.async_write_ha_state = MagicMock()
+        return ent
+
+    def test_fires_triggered_for_matching_device(self):
+        home = _home_state()
+        ent = self._entity(home)
+        home._process_ws_device_alarm_triggered(_triggered())
+        ent._handle_coordinator_update()
+        ent._trigger_event.assert_called_once()
+        event_type, attrs = ent._trigger_event.call_args[0]
+        assert event_type == "triggered"
+        assert attrs["alarm_type"] == "BURGLARY"
+
+    def test_ignores_trigger_for_other_device(self):
+        home = _home_state()
+        ent = self._entity(home)
+        home._process_ws_device_alarm_triggered(
+            _triggered(device_id="00000000-0000-0000-0000-000000000001")
+        )
+        ent._handle_coordinator_update()
+        ent._trigger_event.assert_not_called()
+
+    def test_fires_restored_after_triggered(self):
+        home = _home_state()
+        ent = self._entity(home)
+        home._process_ws_device_alarm_triggered(_triggered())
+        ent._handle_coordinator_update()
+        home._process_ws_device_alarm_restore(_restored())
+        ent._handle_coordinator_update()
+        assert ent._trigger_event.call_args[0][0] == "restored"
+
+    def test_does_not_replay_event_present_at_startup(self):
+        home = _home_state()
+        home._process_ws_device_alarm_triggered(_triggered())
+        ent = self._entity(home)  # created AFTER the event already happened
+        ent._handle_coordinator_update()
+        ent._trigger_event.assert_not_called()
