@@ -31,6 +31,8 @@ type HomelySensorBaseAny = (
 
 def get_manufacturer(device: Device) -> str:
     """Get the manufacturer for a Homely device."""
+    if device.model_vendor:
+        return device.model_vendor
     SERIAL_MATCH = {
         "frient": re.compile(r"^0015BC"),  # Develco Products AS (frient)
         "FireAngel": re.compile(

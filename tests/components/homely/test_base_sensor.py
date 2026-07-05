@@ -89,3 +89,14 @@ class TestHomelySensorBase:
         device.model_name = None
         sensor = HomelySensorBase(mock_coordinator_basic, TEST_LOCATION_ID, device)
         assert sensor.device_manufacturer == "Unknown"
+
+    def test_get_manufacturer_prefers_api_reported_vendor(
+        self, mock_coordinator_basic
+    ):
+        """When the API reports modelVendor, use it verbatim over heuristics."""
+        device = create_mock_device(
+            serial_number="0015BC123456",  # would otherwise heuristically match "frient"
+            model_vendor="Fireangel",
+        )
+        sensor = HomelySensorBase(mock_coordinator_basic, TEST_LOCATION_ID, device)
+        assert sensor.device_manufacturer == "Fireangel"
