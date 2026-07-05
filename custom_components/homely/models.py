@@ -701,6 +701,8 @@ class WsEventType(str, Enum):
 
     DEVICE_STATE_CHANGED = "device-state-changed"
     ALARM_STATE_CHANGED = "alarm-state-changed"
+    DEVICE_ALARM_TRIGGERED = "device-alarm-triggered"
+    DEVICE_ALARM_RESTORE = "device-alarm-restore"
 
 
 class AlarmStateName(str, Enum):
@@ -810,6 +812,17 @@ class WsAlarmChangeData(BaseModel):
     event_id: Annotated[int | str | None, Field(alias="eventId")] = None
 
 
+class WsDeviceAlarmData(BaseModel):
+    """WebSocket per-device alarm trigger/restore event data."""
+
+    model_config = ConfigDict(extra="allow")
+
+    alarm_type: Annotated[str, Field(alias="type")]
+    device_id: Annotated[UUID, Field(alias="deviceId")]
+    location_id: Annotated[UUID, Field(alias="locationId")]
+    event_time: Annotated[datetime | None, Field(alias="eventTime")] = None
+
+
 # TODO: unsure about the exact model here...
 class WsEventUnknown(BaseModel):
     """Unknown WebSocket event type."""
@@ -838,5 +851,31 @@ class WsAlarmChangeEvent(BaseModel):
     data: WsAlarmChangeData
 
 
-type WsEvent = WsDeviceChangeEvent | WsAlarmChangeEvent | WsEventUnknown
+class WsDeviceAlarmTriggeredEvent(BaseModel):
+    """WebSocket per-device alarm trigger event (e.g. BURGLARY)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal[WsEventType.DEVICE_ALARM_TRIGGERED] = (
+        WsEventType.DEVICE_ALARM_TRIGGERED
+    )
+    data: WsDeviceAlarmData
+
+
+class WsDeviceAlarmRestoreEvent(BaseModel):
+    """WebSocket per-device alarm restore event (condition cleared)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal[WsEventType.DEVICE_ALARM_RESTORE] = WsEventType.DEVICE_ALARM_RESTORE
+    data: WsDeviceAlarmData
+
+
+type WsEvent = (
+    WsDeviceChangeEvent
+    | WsAlarmChangeEvent
+    | WsDeviceAlarmTriggeredEvent
+    | WsDeviceAlarmRestoreEvent
+    | WsEventUnknown
+)
 WsEventAdapter: TypeAdapter[WsEvent] = TypeAdapter(WsEvent)

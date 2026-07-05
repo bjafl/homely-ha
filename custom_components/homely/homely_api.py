@@ -49,6 +49,9 @@ from .models import (
     TokenResponse,
     WsAlarmChangeData,
     WsAlarmChangeEvent,
+    WsDeviceAlarmData,
+    WsDeviceAlarmRestoreEvent,
+    WsDeviceAlarmTriggeredEvent,
     WsDeviceChangeData,
     WsDeviceChangeEvent,
     WsEvent,
@@ -407,6 +410,10 @@ class HomelyHomeState(HomeResponse):
 
     # Last alarm-state-changed event received over WebSocket (carries who/when).
     last_alarm_event: WsAlarmChangeData | None = None
+    last_device_alarm_triggered: WsDeviceAlarmData | None = None
+    last_device_alarm_triggered_seq: int = 0
+    last_device_alarm_restored: WsDeviceAlarmData | None = None
+    last_device_alarm_restored_seq: int = 0
 
     @classmethod
     def from_ws_event(
@@ -479,6 +486,10 @@ class HomelyHomeState(HomeResponse):
             )
         elif isinstance(event, WsAlarmChangeEvent):
             self._process_ws_alarm_state_update(event.data)
+        elif isinstance(event, WsDeviceAlarmTriggeredEvent):
+            self._process_ws_device_alarm_triggered(event.data)
+        elif isinstance(event, WsDeviceAlarmRestoreEvent):
+            self._process_ws_device_alarm_restore(event.data)
         else:
             if not ignore_unhandled_event_types:
                 raise HomelyStateUpdateError(
@@ -541,6 +552,30 @@ class HomelyHomeState(HomeResponse):
             )
         self.alarm_state = update_data.state
         self.last_alarm_event = update_data
+
+    def _process_ws_device_alarm_triggered(
+        self, update_data: WsDeviceAlarmData
+    ) -> None:
+        """Record a per-device alarm trigger (e.g. BURGLARY) from the WS stream."""
+        location_id = str(update_data.location_id)
+        if location_id != str(self.location_id):
+            raise HomelyStateUpdateLocationMismatchError(
+                f"Location ID {location_id} in update does not match"
+                + f" location ID {self.location_id} of this home state"
+            )
+        self.last_device_alarm_triggered = update_data
+        self.last_device_alarm_triggered_seq += 1
+
+    def _process_ws_device_alarm_restore(self, update_data: WsDeviceAlarmData) -> None:
+        """Record a per-device alarm restore (condition cleared) from the WS stream."""
+        location_id = str(update_data.location_id)
+        if location_id != str(self.location_id):
+            raise HomelyStateUpdateLocationMismatchError(
+                f"Location ID {location_id} in update does not match"
+                + f" location ID {self.location_id} of this home state"
+            )
+        self.last_device_alarm_restored = update_data
+        self.last_device_alarm_restored_seq += 1
 
 
 class HomelyWebSocketClient:
