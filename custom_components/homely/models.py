@@ -94,10 +94,32 @@ class AlarmReaction(str, Enum):
 
 
 class UserRole(str, Enum):
-    """User roles at a Homely location."""
+    """User roles at a Homely location.
 
-    ADMIN = "ADMIN"
+    Values are grounded in captured app-API traffic (GET /locations/{id}/users,
+    2026-07-05): OWNER, ADMIN, and USER are all real, observed roles.
+    """
+
     OWNER = "OWNER"
+    ADMIN = "ADMIN"
+    USER = "USER"
+    # Fallback for any value not yet known to this integration (e.g. a
+    # possible future GUEST role — GET /guest-users exists but was never
+    # observed populated).
+    UNKNOWN = "UNKNOWN"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "UserRole":
+        """Best-effort map an unrecognized role instead of raising.
+
+        A user role must never crash location parsing or login.
+        """
+        _LOGGER.warning(
+            "Unknown Homely user role %r — defaulting to UNKNOWN. "
+            "Please report so it can be handled explicitly.",
+            value,
+        )
+        return cls.UNKNOWN
 
 
 # Authentication Models
