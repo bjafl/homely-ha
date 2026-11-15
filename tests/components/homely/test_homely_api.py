@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
@@ -596,6 +597,62 @@ class TestHomelyWebSocketClient:
 
         assert ws_client._should_disconnect is True
         mock_ws.close.assert_called_once()
+
+    async def test_connect_derives_read_timeout_from_eio_open(
+        self, api_logged_in_with_locations: HomelyApi
+    ):
+        """connect() must derive an inbound read timeout from the EIO open packet.
+
+        Without a read timeout a silently-dropped socket (no CLOSE frame) is
+        never detected. The open packet advertises pingInterval=25000ms and
+        pingTimeout=5000ms; we tolerate one fully missed ping cycle before
+        declaring the link dead: 2*pingInterval + pingTimeout = 2*25 + 5 = 55s.
+        """
+        ws_client = self._make_client(api_logged_in_with_locations)
+        mock_ws = self._build_mock_ws()
+        api_logged_in_with_locations._client_session.ws_connect = AsyncMock(
+            return_value=mock_ws
+        )
+
+        await ws_client.connect()
+
+        assert ws_client._read_timeout == pytest.approx(55.0)
+
+    async def test_wait_detects_silently_dropped_socket(
+        self, api_logged_in_with_locations: HomelyApi
+    ):
+        """A half-open socket that delivers nothing must be detected via the
+        read timeout: wait() returns, closes the dead socket and fires the
+        disconnect callback (which schedules reconnect) — instead of blocking
+        forever and leaving the integration silently stale until a reload.
+        """
+        ws_client = self._make_client(api_logged_in_with_locations)
+        mock_ws = MagicMock(spec=ClientWebSocketResponse)
+        mock_ws.closed = False
+        mock_ws.send_str = AsyncMock()
+        mock_ws.close = AsyncMock()
+
+        async def _never_returns(*args, **kwargs):
+            # Model a half-open connection: no data, no CLOSE frame — just
+            # silence. A real aiohttp receive() would block here forever.
+            await asyncio.sleep(30)
+
+        mock_ws.receive = AsyncMock(side_effect=_never_returns)
+
+        ws_client._ws = mock_ws
+        ws_client._read_timeout = 0.1  # fire fast for the test
+
+        disconnect_cb = MagicMock()
+        ws_client.register_event_callback(disconnect_cb, "disconnect")
+
+        # Unfixed code has no read timeout and blocks forever here.
+        await asyncio.wait_for(ws_client.wait(), timeout=3.0)
+
+        # The fix consumes via a bounded receive(), detects the dead link,
+        # tears the socket down and reports the disconnect to trigger reconnect.
+        mock_ws.receive.assert_awaited()
+        disconnect_cb.assert_called_once()
+        mock_ws.close.assert_awaited_once()
 
 
 class TestGetField:

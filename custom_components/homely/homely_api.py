@@ -601,6 +601,11 @@ class HomelyWebSocketClient:
         self._name: str | None = kwargs.get("name", None)
         self._ws: ClientWebSocketResponse | None = None
         self._ping_interval: float = 25.0
+        self._ping_timeout: float = 5.0
+        # Upper bound on how long we wait for *any* inbound frame before
+        # treating the socket as dead. Derived from the server's advertised
+        # ping cadence in connect(); see _read_timeout there.
+        self._read_timeout: float = 60.0
 
     @property
     def name(self) -> str:
@@ -662,6 +667,13 @@ class HomelyWebSocketClient:
                 )
             eio_data = json.loads(eio_open.data[1:])
             self._ping_interval = eio_data.get("pingInterval", 25000) / 1000
+            self._ping_timeout = eio_data.get("pingTimeout", 5000) / 1000
+            # Tolerate one fully missed ping cycle before declaring the link
+            # dead, then clamp to a sane range so a bogus server value can't
+            # disable detection (too high) or cause flapping reconnects (too low).
+            self._read_timeout = min(
+                max(2 * self._ping_interval + self._ping_timeout, 30.0), 300.0
+            )
 
             # Server auto-connects us to the namespace — wait for '40'
             # Do NOT send our own '40'; sending it causes immediate server disconnect
@@ -797,8 +809,21 @@ class HomelyWebSocketClient:
         ping_task = asyncio.create_task(self._heartbeat_loop())
         try:
             assert self._ws is not None
-            async for msg in self._ws:
-                if self._should_disconnect:
+            while not self._should_disconnect:
+                # Bounded receive: a silently half-open socket (NAT idle-drop,
+                # server vanished without a CLOSE frame) delivers nothing and
+                # would otherwise block here forever, so the disconnect event
+                # below would never fire and no reconnect would be scheduled.
+                try:
+                    msg = await asyncio.wait_for(
+                        self._ws.receive(), timeout=self._read_timeout
+                    )
+                except (TimeoutError, asyncio.TimeoutError):
+                    self._logger.warning(
+                        "WebSocket %s: no data within %.0fs — assuming dead connection",
+                        self.name,
+                        self._read_timeout,
+                    )
                     break
                 if msg.type == WSMsgType.TEXT:
                     data = msg.data
@@ -817,7 +842,12 @@ class HomelyWebSocketClient:
                             await self._ws.send_str(f"43{ack_id}[]")
                         if ws_event:
                             self._handle_event("event", ws_event)
-                elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
+                elif msg.type in (
+                    WSMsgType.CLOSE,
+                    WSMsgType.CLOSING,
+                    WSMsgType.CLOSED,
+                    WSMsgType.ERROR,
+                ):
                     self._logger.warning(
                         "WebSocket %s: connection dropped (%s)", self.name, msg.type
                     )
@@ -829,6 +859,17 @@ class HomelyWebSocketClient:
         finally:
             ping_task.cancel()
             if not self._should_disconnect:
+                # We exited without a deliberate disconnect() — the socket may
+                # still be half-open, so tear it down before reporting the drop.
+                if self._ws is not None and not self._ws.closed:
+                    try:
+                        await self._ws.close()
+                    except Exception:
+                        self._logger.debug(
+                            "WebSocket %s: error closing dropped socket",
+                            self.name,
+                            exc_info=True,
+                        )
                 self._handle_event("disconnect")
 
     async def _heartbeat_loop(self) -> None:

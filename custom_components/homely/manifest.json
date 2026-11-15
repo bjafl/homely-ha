@@ -11,5 +11,5 @@
     "homeassistant>=2025.1.0",
     "pydantic>=2.10.0"
   ],
-  "version": "2.1.2"
+  "version": "2.1.3"
 }
