@@ -420,8 +420,15 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
                 _LOGGER.warning(
                     "Error disconnecting WebSocket for %s: %s", location_id, err
                 )
-        for task in list(self._ws_tasks.values()) + list(self._reconnect_tasks.values()):
+        tasks = list(self._ws_tasks.values()) + list(self._reconnect_tasks.values())
+        for task in tasks:
             task.cancel()
+        # cancel() only *requests* cancellation - without awaiting the tasks here,
+        # they keep running until HA's own global shutdown-stage timeout catches
+        # them, well after this method (and async_unload_entry, which awaits it)
+        # has already returned.
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         self._ws_tasks.clear()
         self._reconnect_tasks.clear()
         self._ws_clients.clear()

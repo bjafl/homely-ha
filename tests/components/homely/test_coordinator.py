@@ -639,3 +639,34 @@ class TestHomelyDataUpdateCoordinator:
         await coordinator.async_shutdown()
 
         assert len(coordinator._ws_clients) == 0
+
+    async def test_async_shutdown_awaits_pending_reconnect_task(
+        self, hass, mock_config_entry, api_logged_in
+    ):
+        """async_shutdown must not return while a cancelled task is still pending.
+
+        Reproduces the observed production bug: a `_schedule_reconnect` task
+        sleeping through its backoff delay was still logged by HA as "still
+        running" during the shutdown 'close' stage, well after
+        `async_unload_entry` (which awaits `async_shutdown`) had returned.
+        `task.cancel()` alone only *requests* cancellation - it doesn't wait
+        for the task to actually unwind - so async_shutdown must gather the
+        cancelled tasks before returning.
+        """
+        coordinator = HomelyDataUpdateCoordinator(
+            hass,
+            mock_config_entry,
+            api=api_logged_in,
+            selected_location_ids=[TEST_LOCATION_ID],
+        )
+
+        async def never_ending_reconnect() -> None:
+            await asyncio.sleep(300)
+
+        task = hass.async_create_task(never_ending_reconnect())
+        coordinator._reconnect_tasks[TEST_LOCATION_ID] = task
+
+        await coordinator.async_shutdown()
+
+        assert task.done()
+        assert task.cancelled()
