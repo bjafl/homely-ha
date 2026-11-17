@@ -191,7 +191,9 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         if now < self._rate_limited_until:
             remaining = self._rate_limited_until - now
             if self.data:
-                _LOGGER.debug("Rate limited, returning cached data (%.0fs remaining)", remaining)
+                _LOGGER.debug(
+                    "Rate limited, returning cached data (%.0fs remaining)", remaining
+                )
                 return self.data
             raise UpdateFailed(f"Rate limited by Homely API, retry in {remaining:.0f}s")
 
@@ -224,7 +226,9 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         except HomelyRateLimitError as err:
             # Wait 5× the reported retry_after — Homely's actual rate limit window
             # appears to be longer than the reported value.
-            self._rate_limited_until = asyncio.get_event_loop().time() + max(120, err.retry_after * 10)
+            self._rate_limited_until = asyncio.get_event_loop().time() + max(
+                120, err.retry_after * 10
+            )
             _LOGGER.warning("Rate limited by Homely API: %s", err)
             if self.data:
                 return self.data
@@ -269,7 +273,10 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
     ) -> None:
         """Start websocket connection."""
         if self._shutting_down:
-            _LOGGER.debug("Skipping WebSocket start for %s — coordinator shutting down", location_id)
+            _LOGGER.debug(
+                "Skipping WebSocket start for %s — coordinator shutting down",
+                location_id,
+            )
             return
         await self.ensure_api_initialized()
         old_ws = self._ws_clients.get(location_id)
@@ -302,11 +309,19 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             self._ws_clients[location_id] = ws
             self._ws_active[location_id] = True
 
-            # Start the background message loop, replacing any stale task
+            # Start the background message loop, replacing any stale task.
+            # Must be a *background* task: wait() never returns, so registering
+            # it via async_create_task would make HA's startup phase block on
+            # it until the bootstrap timeout ("Setup timed out for bootstrap
+            # waiting on HomelyWebSocketClient.wait()"). Background tasks are
+            # excluded from that gate; we cancel+await them ourselves in
+            # async_shutdown, so nothing leaks at teardown.
             old_task = self._ws_tasks.pop(location_id, None)
             if old_task and not old_task.done():
                 old_task.cancel()
-            self._ws_tasks[location_id] = self.hass.async_create_task(ws.wait())
+            self._ws_tasks[location_id] = self.hass.async_create_background_task(
+                ws.wait(), name=f"homely_ws_{location_id}"
+            )
 
             _LOGGER.info("WebSocket connected for location %s", location_id)
 
@@ -329,8 +344,11 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
         old = self._reconnect_tasks.pop(location_id, None)
         if old and not old.done():
             old.cancel()
-        self._reconnect_tasks[location_id] = self.hass.async_create_task(
-            self._schedule_reconnect(location_id)
+        # Background task: it sleeps through the backoff delay (up to 5 min),
+        # so it must not block HA startup/shutdown gates - see start_websocket.
+        self._reconnect_tasks[location_id] = self.hass.async_create_background_task(
+            self._schedule_reconnect(location_id),
+            name=f"homely_ws_reconnect_{location_id}",
         )
 
     @callback
@@ -376,7 +394,9 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             else:
                 _LOGGER.debug("Skipping refresh request - too recent (rate limited)")
         except Exception as err:
-            _LOGGER.error("Unexpected error in WebSocket update: %s", err, exc_info=True)
+            _LOGGER.error(
+                "Unexpected error in WebSocket update: %s", err, exc_info=True
+            )
 
     async def _schedule_reconnect(self, location_id: str, attempt: int = 1) -> None:
         """Schedule WebSocket reconnection with exponential backoff."""
@@ -400,8 +420,11 @@ class HomelyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, HomelyHomeStat
             _LOGGER.error("WebSocket reconnection failed for %s: %s", location_id, err)
             # Schedule next retry with increased attempt count (max 6 attempts)
             if attempt < 6:
-                self._reconnect_tasks[location_id] = self.hass.async_create_task(
-                    self._schedule_reconnect(location_id, attempt + 1)
+                self._reconnect_tasks[location_id] = (
+                    self.hass.async_create_background_task(
+                        self._schedule_reconnect(location_id, attempt + 1),
+                        name=f"homely_ws_reconnect_{location_id}",
+                    )
                 )
             else:
                 self._reconnect_tasks.pop(location_id, None)

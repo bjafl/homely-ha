@@ -343,6 +343,9 @@ class TestHomelyDataUpdateCoordinator:
         mock_ws.connected = False
         mock_ws.connect = AsyncMock()
         mock_ws.register_event_callback = MagicMock()
+        # wait() is launched as a background task, which eager-starts and so
+        # requires a real coroutine (not a bare MagicMock return value).
+        mock_ws.wait = AsyncMock()
 
         with patch(
             "custom_components.homely.coordinator.HomelyWebSocketClient",
@@ -353,6 +356,48 @@ class TestHomelyDataUpdateCoordinator:
             assert TEST_LOCATION_ID in coordinator._ws_clients
             assert coordinator._ws_active[TEST_LOCATION_ID] is True
             mock_ws.connect.assert_called_once()
+
+    async def test_start_websocket_uses_background_task(
+        self, hass, mock_config_entry, api_logged_in_with_locations
+    ):
+        """The forever-running wait() loop must be a *background* task.
+
+        Reproduces the observed production symptom: HA logged "Setup timed
+        out for bootstrap waiting on HomelyWebSocketClient.wait()" and stalled
+        the startup phase for minutes. `hass.async_create_task` registers the
+        task in `hass._tasks`, which HA awaits before declaring startup
+        complete - fatal for a listener that never returns. Background tasks
+        live in `hass._background_tasks`, which the startup gate excludes.
+        """
+        coordinator = HomelyDataUpdateCoordinator(
+            hass,
+            mock_config_entry,
+            api=api_logged_in_with_locations,
+            selected_location_ids=[TEST_LOCATION_ID],
+        )
+
+        async def never_ending_wait() -> None:
+            await asyncio.sleep(300)
+
+        mock_ws = MagicMock()
+        mock_ws.connected = False
+        mock_ws.connect = AsyncMock()
+        mock_ws.register_event_callback = MagicMock()
+        mock_ws.wait = never_ending_wait
+
+        with patch(
+            "custom_components.homely.coordinator.HomelyWebSocketClient",
+            return_value=mock_ws,
+        ):
+            await coordinator.start_websocket(TEST_LOCATION_ID)
+
+        task = coordinator._ws_tasks[TEST_LOCATION_ID]
+        try:
+            assert task in hass._background_tasks
+            assert task not in hass._tasks
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     async def test_start_websocket_already_connected(
         self, hass, mock_config_entry, api_logged_in_with_locations
@@ -415,11 +460,16 @@ class TestHomelyDataUpdateCoordinator:
         coordinator._ws_clients[TEST_LOCATION_ID] = mock_ws
         coordinator._ws_active[TEST_LOCATION_ID] = True
 
-        with patch.object(hass, "async_create_task") as mock_create_task:
+        # Close the scheduled coroutine so it isn't reported as "never awaited"
+        # (the mock never schedules it onto the loop).
+        mock_create_task = MagicMock(side_effect=lambda coro, **kw: coro.close())
+        with patch.object(hass, "async_create_background_task", mock_create_task):
             coordinator._handle_ws_disconnect(TEST_LOCATION_ID)
 
             assert TEST_LOCATION_ID not in coordinator._ws_clients
             assert coordinator._ws_active[TEST_LOCATION_ID] is False
+            # Reconnect must be scheduled as a background task so its backoff
+            # sleep never blocks HA startup/shutdown gates.
             mock_create_task.assert_called_once()
 
     def test_handle_ws_update_no_event(self, hass, mock_config_entry, api_logged_in):
@@ -593,7 +643,7 @@ class TestHomelyDataUpdateCoordinator:
 
         with (
             patch("asyncio.sleep", new_callable=AsyncMock),
-            patch.object(hass, "async_create_task") as mock_create_task,
+            patch.object(hass, "async_create_background_task") as mock_create_task,
         ):
             await coordinator._schedule_reconnect(TEST_LOCATION_ID, attempt=6)
 
